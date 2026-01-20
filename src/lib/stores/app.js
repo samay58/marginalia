@@ -35,6 +35,13 @@ export const originalContent = writable('');
 /** @type {import('svelte/store').Writable<string>} */
 export const editedContent = writable('');
 
+/** Plain text extracted from rendered document - for accurate diffing */
+/** @type {import('svelte/store').Writable<string>} */
+export const originalPlainText = writable('');
+
+/** @type {import('svelte/store').Writable<string>} */
+export const editedPlainText = writable('');
+
 /** @type {import('svelte/store').Writable<Map<string, Annotation>>} */
 export const annotations = writable(new Map());
 
@@ -52,12 +59,18 @@ export const currentLine = writable(1);
 
 // Derived stores
 
-/** Computed diff between original and edited */
+/** Computed diff between original and edited PLAIN TEXT (what user sees) */
 export const diffResult = derived(
-  [originalContent, editedContent],
-  ([$original, $edited]) => {
-    if (!$original) return null;
-    return computeDiff($original, $edited);
+  [originalPlainText, editedPlainText],
+  ([$originalText, $editedText]) => {
+    // Wait until both stores have content (avoid race condition during initialization)
+    if (!$originalText || !$editedText) {
+      return null;
+    }
+    if ($originalText === $editedText) {
+      return { changes: [], deletions: 0, insertions: 0 };
+    }
+    return computeDiff($originalText, $editedText);
   }
 );
 
@@ -106,7 +119,7 @@ export const linesWithAnnotations = derived(
 /**
  * Initialize the app with file content
  * @param {string} path - File path
- * @param {string} content - File content
+ * @param {string} content - File content (markdown)
  */
 export function initializeWithContent(path, content) {
   const name = path.split('/').pop() || 'Untitled';
@@ -114,9 +127,29 @@ export function initializeWithContent(path, content) {
   filePath.set(path);
   originalContent.set(content);
   editedContent.set(content);
+  // Plain text will be set after editor renders
+  originalPlainText.set('');
+  editedPlainText.set('');
   annotations.set(new Map());
   generalNotes.set('');
   startTime.set(new Date());
+}
+
+/**
+ * Set the original plain text (called after first render)
+ * @param {string} text
+ */
+export function setOriginalPlainText(text) {
+  originalPlainText.set(text);
+  editedPlainText.set(text);
+}
+
+/**
+ * Update the edited plain text (called on each edit)
+ * @param {string} text
+ */
+export function updatePlainText(text) {
+  editedPlainText.set(text);
 }
 
 /**
@@ -168,6 +201,8 @@ export function reset() {
   filePath.set('');
   originalContent.set('');
   editedContent.set('');
+  originalPlainText.set('');
+  editedPlainText.set('');
   annotations.set(new Map());
   generalNotes.set('');
   startTime.set(new Date());

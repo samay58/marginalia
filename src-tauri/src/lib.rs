@@ -43,6 +43,14 @@ fn get_home_dir() -> Result<String, String> {
         .ok_or_else(|| "Could not determine home directory".to_string())
 }
 
+/// Close the application window
+#[tauri::command]
+fn close_window(app: tauri::AppHandle) -> Result<(), String> {
+    // Exit the application
+    app.exit(0);
+    Ok(())
+}
+
 /// Parse CLI arguments and return the file path if provided
 #[tauri::command]
 fn get_cli_file_path(app: tauri::AppHandle) -> Option<String> {
@@ -74,6 +82,7 @@ pub fn run() {
             save_bundle,
             get_home_dir,
             get_cli_file_path,
+            close_window,
         ])
         .setup(|app| {
             // Check for CLI arguments

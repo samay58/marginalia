@@ -22,6 +22,8 @@
     updateGeneralNotes,
     setAnnotation,
     removeAnnotation,
+    setOriginalPlainText,
+    updatePlainText,
   } from '$lib/stores/app.js';
   import { generateBundle } from '$lib/utils/bundle.js';
 
@@ -132,8 +134,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
 
       console.log('Bundle saved to:', savedPath);
 
-      // TODO: Close window after saving
-      // await invoke('close_window');
+      // Close window after saving
+      await invoke('close_window');
     } catch (e) {
       console.error('Error saving bundle:', e);
     }
@@ -165,6 +167,14 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     updateContent(content);
   }
 
+  function handlePlainTextChange(text) {
+    updatePlainText(text);
+  }
+
+  function handleInitialRender(text) {
+    setOriginalPlainText(text);
+  }
+
   function handleLineChange(line) {
     currentLine.set(line);
   }
@@ -185,6 +195,21 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
 
     popoverChangeId = change.id;
     popoverText = change.text;
+    popoverRationale = existingAnnotation?.rationale || '';
+    popoverVisible = true;
+  }
+
+  function handleEditorChangeClick(changeId, text, x, y) {
+    const existingAnnotation = $annotations.get(changeId);
+
+    // Position popover to the right side of the editor area
+    // x and y come from the clicked element's bounding rect
+    const editorRight = window.innerWidth - 100; // Leave some margin
+    popoverX = Math.min(x, editorRight - 320); // 320 = popover width
+    popoverY = Math.max(80, Math.min(y, window.innerHeight - 350));
+
+    popoverChangeId = changeId;
+    popoverText = text;
     popoverRationale = existingAnnotation?.rationale || '';
     popoverVisible = true;
   }
@@ -240,7 +265,11 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       <Editor
         content={$editedContent}
         onChange={handleContentChange}
+        onPlainTextChange={handlePlainTextChange}
+        onInitialRender={handleInitialRender}
         onLineChange={handleLineChange}
+        getDiffResult={() => $diffResult}
+        onClickChange={handleEditorChangeClick}
       />
     </div>
   </main>

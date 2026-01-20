@@ -43,55 +43,37 @@ export function computeDiff(original, edited) {
   let deletions = 0;
   let insertions = 0;
 
-  // Track position in original document for locations
-  let line = 1;
-  let col = 0;
-  let originalOffset = 0;
+  // Track position in EDITED document (where decorations will appear)
+  let editedOffset = 0;
 
   for (const [operation, text] of diffs) {
-    const location = { line, col };
-
     if (operation === -1) {
-      // Deletion
+      // Deletion - text was removed, show at current edited position
       changes.push({
         id: generateChangeId(),
         type: 'deletion',
         text,
-        location,
+        // editedOffset is where this deletion "happened" in the edited doc
+        editedOffset,
+        location: { line: 0, col: 0 }, // Legacy, not used for decorations
       });
       deletions++;
-
-      // Update position based on deleted text
-      for (const char of text) {
-        if (char === '\n') {
-          line++;
-          col = 0;
-        } else {
-          col++;
-        }
-      }
-      originalOffset += text.length;
+      // Don't advance editedOffset - deleted text isn't in edited doc
     } else if (operation === 1) {
-      // Insertion
+      // Insertion - new text exists in edited doc
       changes.push({
         id: generateChangeId(),
         type: 'insertion',
         text,
-        location,
+        editedOffset,
+        location: { line: 0, col: 0 },
       });
       insertions++;
-      // Don't update position for insertions (they happen "at" the current position)
+      // Advance editedOffset by insertion length
+      editedOffset += text.length;
     } else {
-      // Equal - no change, but update position
-      for (const char of text) {
-        if (char === '\n') {
-          line++;
-          col = 0;
-        } else {
-          col++;
-        }
-      }
-      originalOffset += text.length;
+      // Equal - text exists in both, advance editedOffset
+      editedOffset += text.length;
     }
   }
 

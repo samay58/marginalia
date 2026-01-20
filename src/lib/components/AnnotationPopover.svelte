@@ -13,7 +13,7 @@
     visible = false
   } = $props();
 
-  let rationale = $state(currentRationale);
+  let rationale = $state('');
   let inputEl = $state(null);
 
   // Category suggestions
@@ -27,14 +27,17 @@
 
   let selectedCategory = $state('');
 
+  // Sync local rationale with prop when popover opens
   $effect(() => {
-    if (visible && inputEl) {
-      inputEl.focus();
+    // Reading both visible and currentRationale makes this effect reactive to both
+    const isVisible = visible;
+    const propRationale = currentRationale;
+    if (isVisible) {
+      rationale = propRationale || '';
+      if (inputEl) {
+        inputEl.focus();
+      }
     }
-  });
-
-  $effect(() => {
-    rationale = currentRationale;
   });
 
   function handleSubmit() {
