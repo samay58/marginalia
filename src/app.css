@@ -1,0 +1,200 @@
+/* =============================================================================
+   MARGINALIA DESIGN TOKENS
+   Paper & Ink aesthetic - manuscript markup on quality paper
+   ============================================================================= */
+
+:root {
+  /* -------------------------------------------------------------------------
+     PAPER - Warm, off-white. Not sterile.
+     ------------------------------------------------------------------------- */
+  --paper: #FAF9F7;
+  --paper-matte: #F5F4F0;
+  --paper-bright: #FFFFFF;
+  --paper-edge: #E8E6E1;
+
+  /* -------------------------------------------------------------------------
+     INK - Deep, warm blacks. Not pure #000.
+     ------------------------------------------------------------------------- */
+  --ink: #2C2825;
+  --ink-faded: #6B655D;
+  --ink-ghost: #A39E94;
+  --ink-whisper: #C7C2B8;
+
+  /* -------------------------------------------------------------------------
+     REVISION MARKS
+     Struck = muted brick (old correction marks)
+     Added = deep verdigris (editorial insertions)
+     ------------------------------------------------------------------------- */
+  --struck-bg: #F5E6E1;
+  --struck-text: #8B4D3B;
+  --struck-line: #C4796A;
+  --added-bg: #E5F0ED;
+  --added-text: #2D5F52;
+
+  /* -------------------------------------------------------------------------
+     ACCENT - Amber for indicators and actions
+     ------------------------------------------------------------------------- */
+  --accent: #C17F24;
+  --accent-subtle: rgba(193, 127, 36, 0.15);
+  --accent-hover: #D4922E;
+
+  /* -------------------------------------------------------------------------
+     TYPOGRAPHY
+     ------------------------------------------------------------------------- */
+  --font-ui: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Iowan Old Style", Palatino, Georgia, serif;
+  --font-body: "Charter", "Bitstream Charter", Cambria, serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* -------------------------------------------------------------------------
+     SPACING (base: 4px)
+     ------------------------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* -------------------------------------------------------------------------
+     TYPE SCALE
+     ------------------------------------------------------------------------- */
+  --text-title: 1.875rem;
+  --text-heading: 1.375rem;
+  --text-body: 1rem;
+  --text-ui: 0.8125rem;
+  --text-ui-small: 0.75rem;
+
+  /* -------------------------------------------------------------------------
+     EDITOR METRICS
+     ------------------------------------------------------------------------- */
+  --line-height: 1.6875rem;
+  --gutter-width: 3.5rem;
+  --content-max-width: 42rem;
+  --header-height: 3rem;
+
+  /* -------------------------------------------------------------------------
+     BORDERS & RADII
+     ------------------------------------------------------------------------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --border-subtle: 1px solid var(--paper-edge);
+
+  /* -------------------------------------------------------------------------
+     SHADOWS
+     ------------------------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.06);
+  --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.08);
+  --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.12);
+
+  /* -------------------------------------------------------------------------
+     TRANSITIONS
+     ------------------------------------------------------------------------- */
+  --transition-fast: 120ms ease-out;
+  --transition-normal: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
+}
+
+/* =============================================================================
+   DARK MODE
+   ============================================================================= */
+
+:root.dark {
+  --paper: #1C1A18;
+  --paper-matte: #242220;
+  --paper-bright: #2E2B28;
+  --paper-edge: #3D3935;
+
+  --ink: #EBE8E4;
+  --ink-faded: #A8A29A;
+  --ink-ghost: #706B63;
+  --ink-whisper: #4A463F;
+
+  --struck-bg: #3D2A25;
+  --struck-text: #E8A090;
+  --struck-line: #C4796A;
+  --added-bg: #1F3530;
+  --added-text: #8FCEBE;
+
+  --accent: #DBA044;
+  --accent-subtle: rgba(219, 160, 68, 0.15);
+  --accent-hover: #E8B054;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* =============================================================================
+   BASE RESET & GLOBAL STYLES
+   ============================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--ink);
+  background-color: var(--paper);
+  overflow: hidden;
+}
+
+/* Prevent text selection in UI elements */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* =============================================================================
+   SCROLLBAR STYLING
+   ============================================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-whisper);
+  border-radius: var(--radius-lg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-ghost);
+}
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

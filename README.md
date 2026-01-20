@@ -1,7 +1,151 @@
-# Tauri + SvelteKit
+# Marginalia
 
-This template should help get you started developing with Tauri and SvelteKit in Vite.
+A native macOS app for reviewing AI-generated drafts. Make edits, explain why, and output structured feedback for Claude to process.
 
-## Recommended IDE Setup
+## Philosophy
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+Your edits teach the AI. The AI applies the revisions. Marginalia is the bridge.
+
+**Your workflow today:**
+1. Claude drafts an IC memo
+2. You copy to Obsidian or editor, mark it up
+3. You describe changes in prose to Claude
+4. Claude misinterprets half of them
+5. You repeat
+
+**With Marginalia:**
+1. Claude writes draft to `03-work/nventures/deals/elevenlabs/ic-memo-draft.md`
+2. Marginalia opens automatically (PostToolUse hook)
+3. You edit inline, add 3-word rationales ("no hedging", "quantify the miss")
+4. Press Esc. Bundle outputs. Claude reads it, revises correctly.
+5. Stable patterns promote to WRITING.md via `/reflect`
+
+## Quick Start
+
+```bash
+# Install dependencies
+pnpm install
+
+# Development
+pnpm tauri dev
+
+# Build for production
+pnpm tauri build
+```
+
+## Usage
+
+### Manual Launch
+
+```bash
+# Open a file for review
+marginalia open ./ic-memo-draft.md
+
+# With custom bundle directory
+marginalia open ./draft.md --bundle-dir ~/phoenix/.marginalia/bundles
+```
+
+### Claude Code Hook Integration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/marginalia/hooks/post-write.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Files matching these patterns will automatically open in Marginalia:
+- `*-draft.md` in deal folders
+- `draft-*.md` in career exploration
+- Any file with `<!-- REVIEW -->` marker
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Close, output bundle |
+| `⌘ Enter` | Same as Esc |
+| `⌘ /` | Add comment to current edit |
+| `⌘ G` | Toggle general notes |
+| `⌘ Z` | Undo |
+| `⌘ ⇧ Z` | Redo |
+
+## Bundle Output
+
+When you close Marginalia, it generates a bundle at:
+`~/phoenix/.marginalia/bundles/[timestamp]_[filename]/`
+
+**Files generated:**
+- `original.md` - Original content
+- `final.md` - Your edited version
+- `changes.json` - Structured diff data
+- `annotations.json` - Your rationales and categories
+- `summary_for_agent.md` - Human-readable summary for Claude
+
+## Technical Stack
+
+| Component | Choice |
+|-----------|--------|
+| **Shell** | Tauri 2.0 |
+| **Frontend** | Svelte 5 |
+| **Editor** | CodeMirror 6 |
+| **Diff** | diff-match-patch |
+| **Styling** | Vanilla CSS (no Tailwind) |
+
+## Design Aesthetic
+
+Paper & Ink - editorial markup on quality paper. A manuscript annotated with a fountain pen, not an app with colored badges.
+
+- Warm, off-white paper backgrounds
+- Deep, warm ink colors (not pure black)
+- Struck text in muted brick (old correction marks)
+- Added text in deep verdigris (editorial insertions)
+- Serif body text (Charter) for manuscript feel
+
+## Project Structure
+
+```
+marginalia/
+├── src/                      # Svelte frontend
+│   ├── lib/
+│   │   ├── components/       # Editor, Gutter, Popover, Header
+│   │   ├── stores/           # Svelte stores for state
+│   │   └── utils/            # diff, bundle generator
+│   └── routes/               # SvelteKit pages
+├── src-tauri/                # Rust backend
+├── hooks/                    # Claude Code hook scripts
+└── README.md
+```
+
+## Development
+
+```bash
+# Run development server
+pnpm tauri dev
+
+# Build frontend only
+pnpm build
+
+# Build full app
+pnpm tauri build
+
+# The built app will be at:
+# target/release/bundle/macos/Marginalia.app
+```
+
+## License
+
+MIT
