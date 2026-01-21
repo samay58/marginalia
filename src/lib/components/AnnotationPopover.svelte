@@ -1,16 +1,15 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-
-  const dispatch = createEventDispatcher();
-
-  /** @type {{ changeId?: string, text?: string, currentRationale?: string, x?: number, y?: number, visible?: boolean }} */
+  /** @type {{ changeId?: string, text?: string, currentRationale?: string, x?: number, y?: number, visible?: boolean, onSave?: (data: {changeId: string, rationale: string, category?: string}) => void, onRemove?: (data: {changeId: string}) => void, onClose?: () => void }} */
   let {
     changeId = '',
     text = '',
     currentRationale = '',
     x = 0,
     y = 0,
-    visible = false
+    visible = false,
+    onSave,
+    onRemove,
+    onClose
   } = $props();
 
   let rationale = $state('');
@@ -42,7 +41,7 @@
 
   function handleSubmit() {
     if (rationale.trim()) {
-      dispatch('save', {
+      onSave?.({
         changeId,
         rationale: rationale.trim(),
         category: selectedCategory || undefined,
@@ -63,13 +62,13 @@
   }
 
   function close() {
-    dispatch('close');
+    onClose?.();
     rationale = '';
     selectedCategory = '';
   }
 
   function handleRemove() {
-    dispatch('remove', { changeId });
+    onRemove?.({ changeId });
     close();
   }
 </script>

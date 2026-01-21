@@ -17,5 +17,9 @@ export function buildTextMap(doc) {
     return true;
   });
 
-  return { text, offsets };
+  // Add sentinel for end-of-document position lookups
+  // This allows offsetToPos(text.length) to return the correct end position
+  offsets.push(doc.content.size);
+
+  return { text, offsets, docSize: doc.content.size };
 }

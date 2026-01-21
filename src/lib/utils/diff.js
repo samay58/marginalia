@@ -39,6 +39,26 @@ function generateChangeId(type, text, offset) {
 }
 
 /**
+ * Convert a character offset to line/col in text
+ * @param {string} text - The text to compute position in
+ * @param {number} offset - Character offset
+ * @returns {{ line: number, col: number }}
+ */
+function offsetToLocation(text, offset) {
+  let line = 1;
+  let col = 0;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    if (text[i] === '\n') {
+      line++;
+      col = 0;
+    } else {
+      col++;
+    }
+  }
+  return { line, col };
+}
+
+/**
  * Compute the diff between original and edited text
  * @param {string} original - The original text
  * @param {string} edited - The edited text
@@ -68,7 +88,7 @@ export function computeDiff(original, edited) {
         text,
         // editedOffset is where this deletion "happened" in the edited doc
         editedOffset,
-        location: { line: 0, col: 0 }, // Legacy, not used for decorations
+        location: offsetToLocation(edited, editedOffset),
       });
       deletions++;
       // Don't advance editedOffset - deleted text isn't in edited doc
@@ -79,7 +99,7 @@ export function computeDiff(original, edited) {
         type: 'insertion',
         text,
         editedOffset,
-        location: { line: 0, col: 0 },
+        location: offsetToLocation(edited, editedOffset),
       });
       insertions++;
       // Advance editedOffset by insertion length

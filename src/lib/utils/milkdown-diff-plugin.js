@@ -8,8 +8,37 @@ const diffPluginKey = new PluginKey('marginalia-diff');
 
 /**
  * Create a deletion widget (struck-through text)
+ * If deletion spans multiple lines, render as block to preserve formatting
  */
 function createDeletionWidget(change, onClick) {
+  const hasNewlines = change.text.includes('\n');
+
+  if (hasNewlines) {
+    // Block-level deletion - preserve line structure
+    const container = document.createElement('div');
+    container.className = 'struck struck-block';
+    container.setAttribute('contenteditable', 'false');
+    container.dataset.changeId = change.id;
+    container.dataset.changeText = change.text;
+    container.dataset.changeType = 'deletion';
+
+    // Split by newlines and create spans for each line
+    const lines = change.text.split('\n');
+    lines.forEach((line, i) => {
+      if (line) {
+        const lineSpan = document.createElement('span');
+        lineSpan.textContent = line;
+        container.appendChild(lineSpan);
+      }
+      if (i < lines.length - 1) {
+        container.appendChild(document.createElement('br'));
+      }
+    });
+
+    return container;
+  }
+
+  // Inline deletion
   const span = document.createElement('span');
   span.className = 'struck';
   span.textContent = change.text;
@@ -38,11 +67,12 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
   if (diffResult._editedText && textMap.text !== diffResult._editedText) {
     return DecorationSet.empty;
   }
+
   const offsetToPos = (offset) => {
     // Return null for any invalid offset - widget will be skipped
-    // With text verification above, this shouldn't happen, but it's a safety net
     if (!offsets || offsets.length === 0) return null;
     if (offset < 0) return null;
+    // offsets now has a sentinel at the end, so length is text.length + 1
     if (offset >= offsets.length) return null;
     return offsets[offset];
   };
@@ -50,6 +80,7 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
   const decorations = [];
 
   for (const change of diffResult.changes) {
+    // Skip whitespace-only changes to reduce noise
     if (!change.text || change.text.trim().length === 0) {
       continue;
     }
@@ -70,7 +101,12 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
       );
     } else if (change.type === 'insertion') {
       // Inline decoration - highlights the inserted text
-      const endPos = offsetToPos(change.editedOffset + change.text.length);
+      // Calculate end position: find last character's position and add 1
+      // (offsets[i] gives START of char i, we need position AFTER last char)
+      const lastCharOffset = change.editedOffset + change.text.length - 1;
+      const lastCharPos = offsetToPos(lastCharOffset);
+      const endPos = lastCharPos !== null ? lastCharPos + 1 : null;
+
       if (endPos !== null && endPos > docPos) {
         decorations.push(
           Decoration.inline(docPos, endPos, {

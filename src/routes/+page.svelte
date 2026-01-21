@@ -1,6 +1,7 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
   import Header from '$lib/components/Header.svelte';
   import Editor from '$lib/components/Editor.svelte';
@@ -48,6 +49,27 @@
   let cliOutPath = $state('');
   let cliPrinciplesPath = $state('');
   let writingRuleMatcher = $state(null);
+  let closeRequestedUnlisten = null;
+
+  /**
+   * Build a JSON status object for the hook to parse
+   * @param {'reviewed' | 'cancelled' | 'error'} status
+   * @param {boolean} changesMade
+   * @param {string | null} bundlePath
+   * @param {string | null} errorMessage
+   */
+  function buildStatus(status, changesMade, bundlePath, errorMessage = null) {
+    const statusObj = {
+      status,
+      changes_made: changesMade,
+      bundle_path: bundlePath,
+      session_duration_seconds: Math.round((Date.now() - $startTime.getTime()) / 1000)
+    };
+    if (errorMessage) {
+      statusObj.error = errorMessage;
+    }
+    return JSON.stringify(statusObj, null, 2);
+  }
 
   // Sample content for testing (when no CLI file is provided)
   const sampleContent = `# Investment Memo: ElevenLabs
@@ -99,6 +121,23 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
     }
 
+    // Listen for close-requested events (Cmd+Q, red button)
+    // With closable: false in tauri.conf.json, all close actions route through this
+    closeRequestedUnlisten = await listen('tauri://close-requested', async () => {
+      console.log('Close requested - writing cancelled status');
+      if (cliOutPath) {
+        try {
+          await invoke('write_file', {
+            path: cliOutPath,
+            content: buildStatus('cancelled', false, null)
+          });
+        } catch (e) {
+          console.error('Failed to write cancelled status:', e);
+        }
+      }
+      await invoke('close_window');
+    });
+
     // Update line count when content changes
     const unsubscribe = editedContent.subscribe((content) => {
       lineCount = (content.match(/\n/g) || []).length + 1;
@@ -121,6 +160,9 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     return () => {
       unsubscribe();
       mediaQuery.removeEventListener('change', handleChange);
+      if (closeRequestedUnlisten) {
+        closeRequestedUnlisten();
+      }
     };
   });
 
@@ -170,9 +212,16 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
   }
 
   async function handleDone() {
+    // No changes case - write status and close
     if (!$diffResult || $diffResult.changes.length === 0) {
       console.log('No changes to save');
       try {
+        if (cliOutPath) {
+          await invoke('write_file', {
+            path: cliOutPath,
+            content: buildStatus('reviewed', false, null)
+          });
+        }
         await invoke('close_window');
       } catch (e) {
         console.error('Error closing window:', e);
@@ -207,14 +256,29 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
 
       console.log('Bundle saved to:', savedPath);
 
+      // Write JSON status with bundle path
       if (cliOutPath) {
-        await invoke('write_file', { path: cliOutPath, content: `${savedPath}\n` });
+        await invoke('write_file', {
+          path: cliOutPath,
+          content: buildStatus('reviewed', true, savedPath)
+        });
       }
 
       // Close window after saving
       await invoke('close_window');
     } catch (e) {
       console.error('Error saving bundle:', e);
+      // Write error status
+      if (cliOutPath) {
+        try {
+          await invoke('write_file', {
+            path: cliOutPath,
+            content: buildStatus('error', false, null, e.toString())
+          });
+        } catch (writeErr) {
+          console.error('Failed to write error status:', writeErr);
+        }
+      }
     }
   }
 
@@ -336,8 +400,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     });
   }
 
-  function handlePopoverSave(event) {
-    const { changeId, rationale, category } = event.detail;
+  function handlePopoverSave(data) {
+    const { changeId, rationale, category } = data;
     const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
     setAnnotation(changeId, {
       changeIds: [changeId],
@@ -349,8 +413,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     popoverVisible = false;
   }
 
-  function handlePopoverRemove(event) {
-    const { changeId } = event.detail;
+  function handlePopoverRemove(data) {
+    const { changeId } = data;
     removeAnnotation(changeId);
     popoverVisible = false;
   }
@@ -423,9 +487,9 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     x={popoverX}
     y={popoverY}
     visible={popoverVisible}
-    on:save={handlePopoverSave}
-    on:remove={handlePopoverRemove}
-    on:close={handlePopoverClose}
+    onSave={handlePopoverSave}
+    onRemove={handlePopoverRemove}
+    onClose={handlePopoverClose}
   />
 </div>
 

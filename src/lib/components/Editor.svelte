@@ -30,6 +30,8 @@
   let isInternalUpdate = false;
   let lastKnownContent = '';
   let hasCalledInitialRender = false;
+  let diffUpdateTimeout = null;
+  const DIFF_DEBOUNCE_MS = 150; // Wait for typing pause before updating decorations
 
   /**
    * Get current plain text from editor
@@ -70,15 +72,16 @@
                 onPlainTextChange(plainText);
               }
 
-              // Schedule diff decoration update after stores have processed the change.
-              // The plugin's apply() runs during docChanged but with stale diff data.
-              // Text verification in the plugin returns empty decorations for stale diffs.
-              // This rAF triggers a second pass with fresh diff data from updated stores.
-              requestAnimationFrame(() => {
+              // Debounce diff decoration updates to reduce visual jumpiness
+              // Wait for user to pause typing before recalculating decorations
+              if (diffUpdateTimeout) {
+                clearTimeout(diffUpdateTimeout);
+              }
+              diffUpdateTimeout = setTimeout(() => {
                 if (editor) {
                   triggerDiffUpdate(editor);
                 }
-              });
+              }, DIFF_DEBOUNCE_MS);
             }
           });
         })
@@ -157,6 +160,9 @@
   });
 
   onDestroy(() => {
+    if (diffUpdateTimeout) {
+      clearTimeout(diffUpdateTimeout);
+    }
     if (editorContainer) {
       editorContainer.removeEventListener('click', updateLineNumber);
       editorContainer.removeEventListener('keyup', updateLineNumber);
@@ -411,6 +417,18 @@
     padding: 1px 2px;
     border-radius: 2px;
     cursor: pointer;
+  }
+
+  .editor-wrapper :global(.struck-block) {
+    display: block;
+    margin: var(--space-2) 0;
+    padding: var(--space-2) var(--space-3);
+    border-left: 2px solid var(--struck-line);
+  }
+
+  .editor-wrapper :global(.struck-block span) {
+    text-decoration: line-through;
+    text-decoration-color: var(--struck-line);
   }
 
   .editor-wrapper :global(.added) {
