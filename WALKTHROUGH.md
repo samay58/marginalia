@@ -24,25 +24,30 @@ This document explains how Marginalia was built, the decisions we made along the
 Here's the workflow that Marginalia replaces:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  THE OLD WAY (frustrating)                                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Claude drafts an IC memo                                    │
-│                    ↓                                            │
-│  2. You copy it to Obsidian or another editor                   │
-│                    ↓                                            │
-│  3. You mark it up, making changes                              │
-│                    ↓                                            │
-│  4. You describe your changes in prose back to Claude:          │
-│     "Remove the hedging language in paragraph 2,                │
-│      and quantify the miss in Q3..."                            │
-│                    ↓                                            │
-│  5. Claude misinterprets half of them                           │
-│                    ↓                                            │
-│  6. You repeat steps 4-5 until exhausted                        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|  THE OLD WAY (frustrating)                                       |
++------------------------------------------------------------------+
+|                                                                  |
+|  1. Claude drafts an IC memo                                     |
+|                    |                                             |
+|                    v                                             |
+|  2. You copy it to Obsidian or another editor                    |
+|                    |                                             |
+|                    v                                             |
+|  3. You mark it up, making changes                               |
+|                    |                                             |
+|                    v                                             |
+|  4. You describe your changes in prose back to Claude:           |
+|     "Remove the hedging language in paragraph 2,                 |
+|      and quantify the miss in Q3..."                             |
+|                    |                                             |
+|                    v                                             |
+|  5. Claude misinterprets half of them                            |
+|                    |                                             |
+|                    v                                             |
+|  6. You repeat steps 4-5 until exhausted                         |
+|                                                                  |
++------------------------------------------------------------------+
 ```
 
 The fundamental issue: **prose is a lossy format for describing edits**. When you say "remove the hedging," Claude has to guess which words you mean. When you say "quantify the miss," Claude might add numbers in the wrong place.
@@ -62,25 +67,29 @@ Marginalia is a native macOS app that:
 5. Outputs a structured bundle that Claude can read perfectly
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  THE MARGINALIA WAY                                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Claude writes draft → ic-memo-draft.md                      │
-│                    ↓                                            │
-│  2. Marginalia opens automatically (hook)                       │
-│                    ↓                                            │
-│  3. You edit inline, add 3-word rationales                      │
-│     ┌──────────────────────────────────────┐                    │
-│     │  "arguably" → deleted, "no hedging"  │                    │
-│     │  "significant" → "47%", "quantify"   │                    │
-│     └──────────────────────────────────────┘                    │
-│                    ↓                                            │
-│  4. Press Esc. Bundle outputs.                                  │
-│                    ↓                                            │
-│  5. Claude reads structured diff, revises correctly             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|  THE MARGINALIA WAY                                              |
++------------------------------------------------------------------+
+|                                                                  |
+|  1. Claude writes draft -> ic-memo-draft.md                      |
+|                    |                                             |
+|                    v                                             |
+|  2. Marginalia opens automatically (hook)                        |
+|                    |                                             |
+|                    v                                             |
+|  3. You edit inline, add 3-word rationales                       |
+|     +------------------------------------------+                 |
+|     |  "arguably" -> deleted, "no hedging"     |                 |
+|     |  "significant" -> "47%", "quantify"      |                 |
+|     +------------------------------------------+                 |
+|                    |                                             |
+|                    v                                             |
+|  4. Press Esc. Bundle outputs.                                   |
+|                    |                                             |
+|                    v                                             |
+|  5. Claude reads structured diff, revises correctly              |
+|                                                                  |
++------------------------------------------------------------------+
 ```
 
 The key insight: **your edits ARE the instructions**. No translation needed.
@@ -96,25 +105,25 @@ Before writing any code, we established a visual language. This matters more tha
 Marginalia should feel like annotating a manuscript with a fountain pen on quality paper. Not like using a SaaS app with colored badges and notification dots.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   What we're NOT building:          What we ARE building:       │
-│                                                                 │
-│   ┌─────────────────────┐           ┌─────────────────────┐     │
-│   │ ▶ CHANGES (3) ────  │           │                     │     │
-│   │ 🔴 Line 12: deleted │           │  The company has    │     │
-│   │ 🟢 Line 14: added   │           │  arguably achieved  │     │
-│   │ ⚠️  Warning: long   │           │  ~~~~~~~~           │     │
-│   └─────────────────────┘           │  significant growth │     │
-│                                     │  ~~~~~~~~~~         │     │
-│   Tech dashboard                    │  47% growth         │     │
-│   with alerts                       │                     │     │
-│                                     └─────────────────────┘     │
-│                                                                 │
-│                                     Manuscript with             │
-│                                     pen marks                   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                                                                  |
+|   What we're NOT building:          What we ARE building:        |
+|                                                                  |
+|   +---------------------+           +---------------------+      |
+|   | > CHANGES (3) ----  |           |                     |      |
+|   | [x] Line 12: deleted|           |  The company has    |      |
+|   | [+] Line 14: added  |           |  arguably achieved  |      |
+|   | [!] Warning: long   |           |  ~~~~~~~~           |      |
+|   +---------------------+           |  significant growth |      |
+|                                     |  ~~~~~~~~~~         |      |
+|   Tech dashboard                    |  47% growth         |      |
+|   with alerts                       |                     |      |
+|                                     +---------------------+      |
+|                                                                  |
+|                                     Manuscript with              |
+|                                     pen marks                    |
+|                                                                  |
++------------------------------------------------------------------+
 ```
 
 ### The Color Palette
@@ -171,36 +180,36 @@ We deliberately avoided Tailwind CSS. Not because Tailwind is bad, but because:
 ### The Stack
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│                        MARGINALIA STACK                         │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    Svelte 5 Frontend                     │   │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐│   │
-│  │  │   Editor    │ │   Gutter    │ │  Annotation Popover ││   │
-│  │  │ (Milkdown)  │ │ (line nums) │ │    (rationales)     ││   │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────┘│   │
-│  │                                                          │   │
-│  │  ┌─────────────────────────────────────────────────────┐│   │
-│  │  │              Svelte Stores (State)                  ││   │
-│  │  │  originalContent, editedContent, diffResult,        ││   │
-│  │  │  annotations, slopMatchers                          ││   │
-│  │  └─────────────────────────────────────────────────────┘│   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                              │                                  │
-│                              │ invoke()                         │
-│                              ▼                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                   Tauri 2.0 (Rust)                       │   │
-│  │                                                          │   │
-│  │  • read_file / write_file                                │   │
-│  │  • save_bundle (creates output directory)                │   │
-│  │  • get_cli_options (parses command line)                 │   │
-│  │  • Native file dialogs via plugin                        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                                                                  |
+|                        MARGINALIA STACK                          |
+|                                                                  |
+|  +-----------------------------------------------------------+  |
+|  |                    Svelte 5 Frontend                       |  |
+|  |  +-------------+ +-------------+ +---------------------+   |  |
+|  |  |   Editor    | |   Gutter    | |  Annotation Popover |   |  |
+|  |  | (Milkdown)  | | (line nums) | |    (rationales)     |   |  |
+|  |  +-------------+ +-------------+ +---------------------+   |  |
+|  |                                                            |  |
+|  |  +---------------------------------------------------------+  |
+|  |  |              Svelte Stores (State)                      |  |
+|  |  |  originalContent, editedContent, diffResult,            |  |
+|  |  |  annotations, slopMatchers                              |  |
+|  |  +---------------------------------------------------------+  |
+|  +-----------------------------------------------------------+  |
+|                              |                                   |
+|                              | invoke()                          |
+|                              v                                   |
+|  +-----------------------------------------------------------+  |
+|  |                   Tauri 2.0 (Rust)                         |  |
+|  |                                                            |  |
+|  |  * read_file / write_file                                  |  |
+|  |  * save_bundle (creates output directory)                  |  |
+|  |  * get_cli_options (parses command line)                   |  |
+|  |  * Native file dialogs via plugin                          |  |
+|  +-----------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+
 ```
 
 ### Why Tauri?
@@ -209,9 +218,9 @@ We needed a native macOS app, not a web app. Options considered:
 
 | Option | Pros | Cons | Decision |
 |--------|------|------|----------|
-| **Electron** | Mature, lots of examples | 150MB+ bundle, RAM hungry | ❌ |
-| **Tauri** | 5MB bundle, native performance | Newer, Rust learning curve | ✅ |
-| **Swift/AppKit** | True native | Separate from web skills, slower iteration | ❌ |
+| **Electron** | Mature, lots of examples | 150MB+ bundle, RAM hungry | No |
+| **Tauri** | 5MB bundle, native performance | Newer, Rust learning curve | YES |
+| **Swift/AppKit** | True native | Separate from web skills, slower iteration | No |
 
 Tauri won because:
 - The final app is ~5MB instead of 150MB
@@ -225,9 +234,9 @@ We needed a reactive frontend framework. Options:
 
 | Option | Pros | Cons | Decision |
 |--------|------|------|----------|
-| **React** | Ubiquitous, tons of libraries | Boilerplate, bundle size | ❌ |
-| **Vue** | Good DX, lighter than React | Still fairly large | ❌ |
-| **Svelte 5** | Tiny output, true reactivity, new runes syntax | Newer, smaller ecosystem | ✅ |
+| **React** | Ubiquitous, tons of libraries | Boilerplate, bundle size | No |
+| **Vue** | Good DX, lighter than React | Still fairly large | No |
+| **Svelte 5** | Tiny output, true reactivity, new runes syntax | Newer, smaller ecosystem | YES |
 
 Svelte 5's "runes" syntax is particularly clean:
 
@@ -260,9 +269,9 @@ Options:
 
 | Option | Pros | Cons | Decision |
 |--------|------|------|----------|
-| **CodeMirror 6** | Powerful, great for code | More code-focused, heavier | ❌ |
-| **Tiptap** | ProseMirror-based, nice API | Large bundle | ❌ |
-| **Milkdown** | ProseMirror-based, markdown-first, modular | Newer | ✅ |
+| **CodeMirror 6** | Powerful, great for code | More code-focused, heavier | No |
+| **Tiptap** | ProseMirror-based, nice API | Large bundle | No |
+| **Milkdown** | ProseMirror-based, markdown-first, modular | Newer | YES |
 
 Milkdown is a thin wrapper around ProseMirror, specifically designed for markdown. This matters because:
 
@@ -300,101 +309,101 @@ This library:
 Here's how data moves through the system:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        DATA FLOW                                │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                        DATA FLOW                                 |
++------------------------------------------------------------------+
 
    STARTUP
-   ═══════
-   CLI args ──────► Tauri parses ──────► Frontend receives
-       │                                        │
-       │            ┌───────────────────────────┘
-       │            │
-       ▼            ▼
+   =======
+   CLI args -------> Tauri parses -------> Frontend receives
+       |                                        |
+       |            +---------------------------+
+       |            |
+       v            v
    "marginalia open ./draft.md"    invoke('get_cli_options')
-                                            │
-                                            ▼
+                                            |
+                                            v
                                    invoke('read_file')
-                                            │
-                                            ▼
+                                            |
+                                            v
                                    initializeWithContent()
-                                            │
-                                   ┌────────┴────────┐
-                                   │                 │
-                                   ▼                 ▼
+                                            |
+                                   +--------+--------+
+                                   |                 |
+                                   v                 v
                            originalContent    editedContent
                                (store)           (store)
 
 
    EDITING
-   ═══════
-   User types ──────► Milkdown ──────► markdownUpdated callback
-                                               │
-                      ┌────────────────────────┘
-                      │
-                      ▼
+   =======
+   User types -------> Milkdown -------> markdownUpdated callback
+                                               |
+                      +------------------------+
+                      |
+                      v
               Extract plain text (buildTextMap)
-                      │
-         ┌────────────┴────────────┐
-         │                         │
-         ▼                         ▼
+                      |
+         +------------+------------+
+         |                         |
+         v                         v
    editedPlainText           editedContent
        (store)                  (store)
-         │
-         │ Derived store computes diff
-         ▼
-   ┌─────────────────────────────────────────┐
-   │              diffResult                  │
-   │  {                                       │
-   │    changes: [                            │
-   │      { id: 'c_abc', type: 'deletion',    │
-   │        text: 'arguably', editedOffset: 47 },
-   │      { id: 'c_def', type: 'insertion',   │
-   │        text: '47%', editedOffset: 112 }  │
-   │    ],                                    │
-   │    _editedText: '...' // for verification│
-   │  }                                       │
-   └─────────────────────────────────────────┘
-         │
-         │ Plugin reads diffResult
-         ▼
-   ┌─────────────────────────────────────────┐
-   │         milkdown-diff-plugin             │
-   │                                          │
-   │  For each change:                        │
-   │    1. Map editedOffset → doc position    │
-   │    2. Create decoration at that position │
-   │       • deletion → widget (struck span)  │
-   │       • insertion → inline highlight     │
-   └─────────────────────────────────────────┘
+         |
+         | Derived store computes diff
+         v
+   +-----------------------------------------+
+   |              diffResult                  |
+   |  {                                       |
+   |    changes: [                            |
+   |      { id: 'c_abc', type: 'deletion',    |
+   |        text: 'arguably', editedOffset: 47 },
+   |      { id: 'c_def', type: 'insertion',   |
+   |        text: '47%', editedOffset: 112 }  |
+   |    ],                                    |
+   |    _editedText: '...' // for verification|
+   |  }                                       |
+   +-----------------------------------------+
+         |
+         | Plugin reads diffResult
+         v
+   +-----------------------------------------+
+   |         milkdown-diff-plugin             |
+   |                                          |
+   |  For each change:                        |
+   |    1. Map editedOffset -> doc position   |
+   |    2. Create decoration at that position |
+   |       - deletion -> widget (struck span) |
+   |       - insertion -> inline highlight    |
+   +-----------------------------------------+
 
 
    OUTPUT
-   ══════
-   User presses Esc ──────► handleDone()
-                                 │
-                                 ▼
+   ======
+   User presses Esc -------> handleDone()
+                                 |
+                                 v
                          generateBundle()
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-              ▼                  ▼                  ▼
+                                 |
+              +------------------+------------------+
+              |                  |                  |
+              v                  v                  v
          original.md        changes.json    summary_for_agent.md
          final.md          annotations.json
-              │                  │                  │
-              └──────────────────┴──────────────────┘
-                                 │
-                                 ▼
+              |                  |                  |
+              +------------------+------------------+
+                                 |
+                                 v
                     invoke('save_bundle', { files })
-                                 │
-                                 ▼
+                                 |
+                                 v
                     ~/phoenix/.marginalia/bundles/
-                    └── 2026-01-20T14-30-00_draft/
-                        ├── original.md
-                        ├── final.md
-                        ├── changes.json
-                        ├── annotations.json
-                        └── summary_for_agent.md
+                    +-- 2026-01-20T14-30-00_draft/
+                        +-- original.md
+                        +-- final.md
+                        +-- changes.json
+                        +-- annotations.json
+                        +-- summary_for_agent.md
 ```
 
 ### State Management
@@ -402,44 +411,44 @@ Here's how data moves through the system:
 We use a hybrid approach: Svelte stores for global state, local `$state()` for component-specific state.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      STATE ARCHITECTURE                         │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                      STATE ARCHITECTURE                          |
++------------------------------------------------------------------+
 
    GLOBAL (Svelte stores in app.js)
-   ════════════════════════════════
-   ┌─────────────────────────────────────────────────────────────┐
-   │                                                             │
-   │  Writable stores (can be set directly):                     │
-   │  • originalContent    - The file as loaded                  │
-   │  • editedContent      - Current markdown                    │
-   │  • originalPlainText  - Rendered text snapshot              │
-   │  • editedPlainText    - Current rendered text               │
-   │  • annotations        - Map<changeId, annotation>           │
-   │  • slopMatchers       - Regex patterns from WRITING.md      │
-   │                                                             │
-   │  Derived stores (computed automatically):                   │
-   │  • diffResult         - Computed from plainText stores      │
-   │  • hasChanges         - originalContent !== editedContent   │
-   │  • changeSummary      - "3 deletions, 2 insertions"         │
-   │  • linesWithChanges   - Set of line numbers                 │
-   │  • linesWithSlop      - Lines with WRITING.md violations    │
-   │                                                             │
-   └─────────────────────────────────────────────────────────────┘
+   ================================
+   +-------------------------------------------------------------+
+   |                                                             |
+   |  Writable stores (can be set directly):                     |
+   |  - originalContent    - The file as loaded                  |
+   |  - editedContent      - Current markdown                    |
+   |  - originalPlainText  - Rendered text snapshot              |
+   |  - editedPlainText    - Current rendered text               |
+   |  - annotations        - Map<changeId, annotation>           |
+   |  - slopMatchers       - Regex patterns from WRITING.md      |
+   |                                                             |
+   |  Derived stores (computed automatically):                   |
+   |  - diffResult         - Computed from plainText stores      |
+   |  - hasChanges         - originalContent !== editedContent   |
+   |  - changeSummary      - "3 deletions, 2 insertions"         |
+   |  - linesWithChanges   - Set of line numbers                 |
+   |  - linesWithSlop      - Lines with WRITING.md violations    |
+   |                                                             |
+   +-------------------------------------------------------------+
 
    LOCAL (component $state())
-   ══════════════════════════
-   ┌─────────────────────────────────────────────────────────────┐
-   │  +page.svelte:                                              │
-   │  • popoverVisible, popoverX, popoverY                       │
-   │  • notesExpanded                                            │
-   │  • isDark                                                   │
-   │                                                             │
-   │  Editor.svelte:                                             │
-   │  • editor (Milkdown instance)                               │
-   │  • isReady                                                  │
-   │  • isInternalUpdate (prevents feedback loops)               │
-   └─────────────────────────────────────────────────────────────┘
+   ==========================
+   +-------------------------------------------------------------+
+   |  +page.svelte:                                              |
+   |  - popoverVisible, popoverX, popoverY                       |
+   |  - notesExpanded                                            |
+   |  - isDark                                                   |
+   |                                                             |
+   |  Editor.svelte:                                             |
+   |  - editor (Milkdown instance)                               |
+   |  - isReady                                                  |
+   |  - isInternalUpdate (prevents feedback loops)               |
+   +-------------------------------------------------------------+
 ```
 
 Why this split?
@@ -591,24 +600,24 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
 Here's a subtle bug we had to fix:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    THE RACE CONDITION                           │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                    THE RACE CONDITION                            |
++------------------------------------------------------------------+
 
-   Time ──────────────────────────────────────────────────────►
+   Time ---------------------------------------------------------->
 
    T1: User types 'x'
-       │
-       ▼
+       |
+       v
    T2: ProseMirror processes transaction
        diffPlugin.apply() runs with OLD diffResult
-       │
-       ▼
+       |
+       v
    T3: markdownUpdated callback fires
        Stores update
        NEW diffResult computed
-       │
-       ▼
+       |
+       v
    T4: requestAnimationFrame triggers diffPlugin update
        NOW it has the correct diffResult
 
@@ -661,11 +670,11 @@ When you press Esc, Marginalia outputs a bundle. This is the contract between yo
 
 ```
 ~/phoenix/.marginalia/bundles/2026-01-20T14-30-00_ic-memo/
-├── original.md          # What Claude wrote
-├── final.md             # What you changed it to
-├── changes.json         # Structured diff
-├── annotations.json     # Your rationales
-└── summary_for_agent.md # Human-readable summary
+|-- original.md          # What Claude wrote
+|-- final.md             # What you changed it to
+|-- changes.json         # Structured diff
+|-- annotations.json     # Your rationales
++-- summary_for_agent.md # Human-readable summary
 ```
 
 ### changes.json
@@ -725,7 +734,7 @@ When you press Esc, Marginalia outputs a bundle. This is the contract between yo
    - Matches WRITING.md: Avoid hedging language
 
 2. quantify growth
-   - "significant" → "47%"
+   - "significant" -> "47%"
    - Category: accuracy
 
 ## General
@@ -743,16 +752,16 @@ Marginalia integrates with Claude Code via a PostToolUse hook.
 ### How Hooks Work
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    HOOK FLOW                                    │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                    HOOK FLOW                                     |
++------------------------------------------------------------------+
 
    Claude Code writes a file
-           │
-           ▼
+           |
+           v
    PostToolUse hook triggers
-           │
-           ▼
+           |
+           v
    hooks/post-write.sh receives JSON:
    {
      "tool_input": {
@@ -760,13 +769,13 @@ Marginalia integrates with Claude Code via a PostToolUse hook.
        "content": "# Investment Memo..."
      }
    }
-           │
-           ▼
+           |
+           v
    Script checks patterns:
-   • *-draft.md?           ──► should_review=true
-   • <!-- REVIEW --> in content? ──► should_review=true
-           │
-           ▼
+   - *-draft.md?           ---> should_review=true
+   - <!-- REVIEW --> in content? ---> should_review=true
+           |
+           v
    If should_review:
      marginalia open "$file_path" &
 ```
@@ -801,51 +810,51 @@ The `&` at the end is important - it runs Marginalia in the background so Claude
 We built Marginalia in 7 phases, tracked via beads (our issue tracker).
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    BUILD PHASES                                 │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|                    BUILD PHASES                                  |
++------------------------------------------------------------------+
 
    Phase 1: Foundation
-   ═══════════════════
-   • Tauri + Svelte scaffold
-   • CSS design tokens (Paper & Ink)
-   • Basic window layout
+   ===================
+   - Tauri + Svelte scaffold
+   - CSS design tokens (Paper & Ink)
+   - Basic window layout
 
    Phase 2: Editor
-   ═══════════════
-   • Milkdown integration
-   • Custom theme
-   • Gutter with line numbers
+   ===============
+   - Milkdown integration
+   - Custom theme
+   - Gutter with line numbers
 
    Phase 3: Diff
-   ═════════════
-   • diff-match-patch integration
-   • Change tracking
-   • Visual decorations
+   =============
+   - diff-match-patch integration
+   - Change tracking
+   - Visual decorations
 
    Phase 4: Comments
-   ═════════════════
-   • Annotation popover
-   • Rationale input
-   • Category chips
+   =================
+   - Annotation popover
+   - Rationale input
+   - Category chips
 
    Phase 5: Output
-   ═══════════════
-   • Bundle generation
-   • Rust file I/O
-   • CLI argument parsing
+   ===============
+   - Bundle generation
+   - Rust file I/O
+   - CLI argument parsing
 
    Phase 6: Polish
-   ═══════════════
-   • Dark mode
-   • Transitions
-   • Edge cases
+   ===============
+   - Dark mode
+   - Transitions
+   - Edge cases
 
    Phase 7: Integration
-   ════════════════════
-   • Claude Code hook
-   • Pattern matching
-   • WRITING.md integration
+   ====================
+   - Claude Code hook
+   - Pattern matching
+   - WRITING.md integration
 ```
 
 ### What Changed from Original Spec
