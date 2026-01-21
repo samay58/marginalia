@@ -212,7 +212,43 @@ We deliberately avoided Tailwind CSS. Not because Tailwind is bad, but because:
 +------------------------------------------------------------------+
 ```
 
-### Why Tauri?
+### What is Tauri? (The App Shell)
+
+To understand Tauri, you need to understand the problem it solves.
+
+**The problem**: You want to build a desktop app (something that runs as a native window on macOS/Windows/Linux, can access the filesystem, etc.). But you know web technologies (HTML, CSS, JavaScript) better than native platform code (Swift, C++, etc.).
+
+**The traditional solution**: Electron. Electron bundles an entire copy of Chrome (the browser engine) inside your app. Your "app" is actually a website running in a hidden browser window. This works, but:
+- Your app is 150MB+ (because it includes all of Chrome)
+- It uses lots of RAM (because it's running a full browser)
+- Every Electron app is essentially a separate browser instance
+
+**Tauri's approach**: Instead of bundling Chrome, Tauri uses your operating system's *built-in* web view:
+- On macOS: WebKit (the Safari engine, already installed)
+- On Windows: WebView2 (Edge's engine, already installed)
+- On Linux: WebKitGTK (usually installed)
+
+The result: your app is 5-10MB instead of 150MB, uses less RAM, and feels more native.
+
+**The two halves of a Tauri app**:
+
+```
++---------------------------+
+|      Your Frontend        |  <-- HTML/CSS/JS (any framework)
+|   (runs in the WebView)   |      This is what users see
++---------------------------+
+            |
+            | invoke("command", args)
+            v
++---------------------------+
+|      Rust Backend         |  <-- Native code (Rust)
+|   (runs natively)         |      File I/O, system access
++---------------------------+
+```
+
+The frontend can't directly access the filesystem (security). Instead, it calls Rust functions via `invoke()`. The Rust code does the actual work and returns results.
+
+### Why Tauri for Marginalia?
 
 We needed a native macOS app, not a web app. Options considered:
 
@@ -228,7 +264,58 @@ Tauri won because:
 - Rust backend means we can do file I/O safely
 - We get to keep using web tech for the UI
 
-### Why Svelte 5?
+### What is Svelte? (Compile-Time Reactivity)
+
+**The problem all UI frameworks solve**: When data changes, the screen should update. If `count` goes from 5 to 6, the "5" on screen should become "6". This is called "reactivity."
+
+**How React/Vue do it (runtime reactivity)**:
+
+React and Vue ship a runtime library to your browser. When you change data, the runtime:
+1. Re-runs your component function
+2. Builds a "virtual DOM" (a JavaScript representation of what the UI should look like)
+3. Compares it to the previous virtual DOM ("diffing")
+4. Updates only the parts that changed
+
+This works, but the runtime library is 40-100KB, and the diffing happens on every update.
+
+**How Svelte does it (compile-time reactivity)**:
+
+Svelte is a *compiler*, not a runtime. When you build your app:
+1. Svelte reads your component code
+2. It figures out exactly which DOM elements depend on which variables
+3. It generates vanilla JavaScript that updates those specific elements directly
+
+No virtual DOM. No runtime diffing. The compiled code just says "when `count` changes, update this specific `<span>`."
+
+**The result**: Smaller bundles (no runtime library) and faster updates (no diffing).
+
+**Svelte 5's "runes" syntax**:
+
+Svelte 5 introduced a new syntax called "runes" (the `$` symbols):
+
+```javascript
+let count = $state(0);        // Reactive variable
+let doubled = $derived(count * 2);  // Computed from count
+
+$effect(() => {
+  console.log(count);  // Runs when count changes
+});
+```
+
+Compare to React:
+
+```javascript
+const [count, setCount] = useState(0);
+const doubled = useMemo(() => count * 2, [count]);
+
+useEffect(() => {
+  console.log(count);
+}, [count]);
+```
+
+Svelte's version is shorter and you don't need to manually track dependencies.
+
+### Why Svelte 5 for Marginalia?
 
 We needed a reactive frontend framework. Options:
 
@@ -258,7 +345,89 @@ $effect(() => {
 
 No useState, no useEffect, no dependency arrays. Just JavaScript with some compiler magic.
 
-### Why Milkdown?
+### What is ProseMirror? (Document Models)
+
+**The problem**: Building a rich text editor is *hard*. Like, really hard.
+
+Consider what happens when you press "B" for bold in a text editor:
+- If text is selected, wrap it in bold
+- But what if the selection spans multiple paragraphs?
+- What if part of it is already bold?
+- What about undo/redo?
+- What about collaborative editing?
+
+Naive approaches (like using `contenteditable` directly) break in edge cases.
+
+**ProseMirror's solution**: A document model.
+
+Instead of treating the document as HTML or a string, ProseMirror represents it as a tree of typed nodes:
+
+```
+Document
+  +-- Paragraph
+  |     +-- Text "Hello "
+  |     +-- Text "world" (bold)
+  +-- Paragraph
+        +-- Text "Second paragraph"
+```
+
+Every edit is a "transaction" that transforms one document state into another. This gives you:
+- Predictable behavior (the model defines what's allowed)
+- Undo/redo for free (just replay transactions backwards)
+- Collaborative editing (merge transactions from multiple users)
+- **Positions**: Every character has a numeric position in the document
+
+**Why positions matter for Marginalia**:
+
+Our diff algorithm says "the word 'arguably' was deleted at character 47." To show this visually, we need to place a decoration at position 47. ProseMirror's document model lets us map character offsets to exact screen positions.
+
+**Decorations**:
+
+ProseMirror lets you add "decorations" - visual elements that overlay the document without changing it:
+- **Inline decorations**: Add a CSS class to a range of text (for highlighting insertions)
+- **Widget decorations**: Insert a DOM element at a position (for showing deleted text)
+
+This is how we show diffs without actually modifying the document structure.
+
+### What is Milkdown? (ProseMirror + Markdown)
+
+ProseMirror is powerful but low-level. You have to define your own document schema, write your own parsing/serialization, etc.
+
+Milkdown is a framework built on top of ProseMirror specifically for markdown editing:
+
+```
++------------------------------------------+
+|               Milkdown                    |
+|  +------------------------------------+  |
+|  |  Markdown parser/serializer        |  |
+|  |  (converts between text and doc)   |  |
+|  +------------------------------------+  |
+|  +------------------------------------+  |
+|  |  Pre-built schema                  |  |
+|  |  (headings, lists, code, etc.)     |  |
+|  +------------------------------------+  |
+|  +------------------------------------+  |
+|  |  Theme/styling system              |  |
+|  +------------------------------------+  |
+|  +------------------------------------+  |
+|  |  Plugin system                     |  |
+|  |  (we add our diff plugin here)     |  |
+|  +------------------------------------+  |
+|                   |                       |
+|                   v                       |
+|  +------------------------------------+  |
+|  |           ProseMirror              |  |
+|  |  (the core editor engine)          |  |
+|  +------------------------------------+  |
++------------------------------------------+
+```
+
+Milkdown gives us:
+- A working markdown editor out of the box
+- The ability to add custom ProseMirror plugins (for our diff visualization)
+- Access to the underlying document model (for position mapping)
+
+### Why Milkdown for Marginalia?
 
 We needed a markdown editor with these capabilities:
 1. Render markdown as you type (WYSIWYG-ish)
@@ -279,7 +448,75 @@ Milkdown is a thin wrapper around ProseMirror, specifically designed for markdow
 2. **Document model** gives us character-level position information
 3. **Markdown-first** means we don't fight the abstraction
 
-### Why diff-match-patch?
+### What is diff-match-patch? (Text Diffing)
+
+**The problem**: Given two strings, find what changed.
+
+```
+Original: "The company has arguably achieved growth"
+Edited:   "The company has achieved 47% growth"
+```
+
+Humans can see: "arguably" was deleted, "47%" was inserted. But how does a computer figure this out?
+
+**The naive approach**: Compare character by character.
+
+This breaks on insertions. If you insert one character at the start, suddenly *every* position is "different."
+
+**The Longest Common Subsequence (LCS) approach**:
+
+Find the longest sequence of characters that appears in both strings (not necessarily contiguous). Everything else is either an insertion or deletion.
+
+```
+Original: "The company has arguably achieved growth"
+Edited:   "The company has achieved 47% growth"
+
+LCS:      "The company has achieved growth"
+                         ^^^^^^^
+                         "arguably " deleted
+                                  ^^^
+                                  "47% " inserted
+```
+
+**diff-match-patch's approach**:
+
+The library uses a sophisticated algorithm (based on Eugene Myers' diff algorithm) that:
+
+1. **Finds differences efficiently**: O(ND) complexity where N is text length, D is number of differences
+2. **Groups related changes**: "Semantic cleanup" merges tiny changes into logical edits
+3. **Handles edge cases**: Unicode, whitespace, very long texts
+
+**The output format**:
+
+```javascript
+const diffs = dmp.diff_main(original, edited);
+// Result: array of [operation, text] tuples
+// [
+//   [0, "The company has "],     // 0 = equal
+//   [-1, "arguably "],           // -1 = deletion
+//   [0, "achieved "],            // 0 = equal
+//   [1, "47% "],                 // 1 = insertion
+//   [0, "growth"]                // 0 = equal
+// ]
+```
+
+Each tuple tells us: this text was unchanged (0), deleted (-1), or inserted (1).
+
+**Semantic cleanup**:
+
+Without cleanup, you might get:
+```
+[-1, "a"], [-1, "r"], [-1, "g"], [1, "4"], [1, "7"]...
+```
+
+With cleanup, you get logical units:
+```
+[-1, "arguably"], [1, "47%"]
+```
+
+Much more useful for showing to humans.
+
+### Why diff-match-patch for Marginalia?
 
 For computing the difference between original and edited text:
 
