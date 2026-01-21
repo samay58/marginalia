@@ -7,7 +7,8 @@ const dmp = new DiffMatchPatch();
  * @property {string} id - Unique identifier for the change
  * @property {'deletion' | 'insertion' | 'equal'} type - Type of change
  * @property {string} text - The text content
- * @property {{ line: number, col: number }} location - Position in the document
+ * @property {number} editedOffset - Character position in the edited document
+ * @property {{ line: number, col: number }} location - Position in the document (legacy)
  */
 
 /**
@@ -15,14 +16,26 @@ const dmp = new DiffMatchPatch();
  * @property {Change[]} changes - List of all changes
  * @property {number} deletions - Number of deletions
  * @property {number} insertions - Number of insertions
+ * @property {string} [_originalText] - Original text snapshot for verification
+ * @property {string} [_editedText] - Edited text snapshot for verification
  */
 
 /**
- * Generate a unique ID for a change
+ * Generate a stable ID for a change based on its content
+ * Using content-based hash ensures same edit produces same ID,
+ * which preserves annotations across diff recomputes
+ * @param {string} type - 'deletion' or 'insertion'
+ * @param {string} text - The changed text
+ * @param {number} offset - Position in edited document
  * @returns {string}
  */
-function generateChangeId() {
-  return 'c_' + Math.random().toString(36).substring(2, 8);
+function generateChangeId(type, text, offset) {
+  const input = type + '|' + offset + '|' + text.slice(0, 50);
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  }
+  return 'c_' + Math.abs(hash).toString(36);
 }
 
 /**
@@ -50,7 +63,7 @@ export function computeDiff(original, edited) {
     if (operation === -1) {
       // Deletion - text was removed, show at current edited position
       changes.push({
-        id: generateChangeId(),
+        id: generateChangeId('deletion', text, editedOffset),
         type: 'deletion',
         text,
         // editedOffset is where this deletion "happened" in the edited doc
@@ -62,7 +75,7 @@ export function computeDiff(original, edited) {
     } else if (operation === 1) {
       // Insertion - new text exists in edited doc
       changes.push({
-        id: generateChangeId(),
+        id: generateChangeId('insertion', text, editedOffset),
         type: 'insertion',
         text,
         editedOffset,
@@ -81,6 +94,9 @@ export function computeDiff(original, edited) {
     changes: changes.filter(c => c.type !== 'equal'),
     deletions,
     insertions,
+    // Attach text snapshots for decoration verification
+    _originalText: original,
+    _editedText: edited,
   };
 }
 

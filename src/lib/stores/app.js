@@ -45,6 +45,9 @@ export const editedPlainText = writable('');
 /** @type {import('svelte/store').Writable<Map<string, Annotation>>} */
 export const annotations = writable(new Map());
 
+/** @type {import('svelte/store').Writable<Array<{ label: string, pattern: string, flags: string }>>} */
+export const slopMatchers = writable([]);
+
 /** @type {import('svelte/store').Writable<string>} */
 export const generalNotes = writable('');
 
@@ -114,6 +117,32 @@ export const linesWithAnnotations = derived(
   }
 );
 
+/** Lines that violate WRITING.md bans */
+export const linesWithSlop = derived(
+  [originalPlainText, slopMatchers, hasChanges],
+  ([$text, $matchers, $hasChanges]) => {
+    if ($hasChanges) return new Set();
+    if (!$text || !$matchers || $matchers.length === 0) return new Set();
+    const lines = $text.split(/\r?\n/);
+    const result = new Set();
+    const compiled = $matchers.map((matcher) => ({
+      label: matcher.label,
+      regex: new RegExp(matcher.pattern, matcher.flags),
+    }));
+    lines.forEach((line, index) => {
+      for (const matcher of compiled) {
+        if (!matcher?.regex) continue;
+        matcher.regex.lastIndex = 0;
+        if (matcher.regex.test(line)) {
+          result.add(index + 1);
+          break;
+        }
+      }
+    });
+    return result;
+  }
+);
+
 // Actions
 
 /**
@@ -158,6 +187,14 @@ export function updatePlainText(text) {
  */
 export function updateContent(content) {
   editedContent.set(content);
+}
+
+/**
+ * Update slop matchers used for WRITING.md violations
+ * @param {Array<{ label: string, pattern: string, flags: string }>} matchers
+ */
+export function setSlopMatchers(matchers) {
+  slopMatchers.set(matchers || []);
 }
 
 /**

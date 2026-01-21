@@ -1,6 +1,16 @@
 use std::fs;
 use std::path::PathBuf;
+use serde::Serialize;
 use tauri::Manager;
+
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CliOptions {
+    file_path: Option<String>,
+    bundle_dir: Option<String>,
+    principles_path: Option<String>,
+    out_path: Option<String>,
+}
 
 /// Read a file from the filesystem
 #[tauri::command]
@@ -46,7 +56,11 @@ fn get_home_dir() -> Result<String, String> {
 /// Close the application window
 #[tauri::command]
 fn close_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Exit the application
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .close()
+            .map_err(|e| format!("Failed to close window: {}", e))?;
+    }
     app.exit(0);
     Ok(())
 }
@@ -54,46 +68,33 @@ fn close_window(app: tauri::AppHandle) -> Result<(), String> {
 /// Parse CLI arguments and return the file path if provided
 #[tauri::command]
 fn get_cli_file_path(app: tauri::AppHandle) -> Option<String> {
-    let args: Vec<String> = std::env::args().collect();
+    app.state::<CliState>().options.file_path.clone()
+}
 
-    // Look for "open" command followed by a path
-    // Usage: marginalia open /path/to/file.md
-    for i in 0..args.len() {
-        if args[i] == "open" && i + 1 < args.len() {
-            return Some(args[i + 1].clone());
-        }
-    }
-
-    // Also check for direct file path argument (first non-flag arg after binary name)
-    if args.len() > 1 && !args[1].starts_with('-') && args[1] != "open" {
-        return Some(args[1].clone());
-    }
-
-    None
+#[tauri::command]
+fn get_cli_options(app: tauri::AppHandle) -> CliOptions {
+    app.state::<CliState>().options.clone()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
             save_bundle,
             get_home_dir,
             get_cli_file_path,
+            get_cli_options,
             close_window,
         ])
         .setup(|app| {
             // Check for CLI arguments
             let args: Vec<String> = std::env::args().collect();
-
-            // Store CLI file path in app state for the frontend to access
-            if let Some(file_path) = get_cli_file_path_internal(&args) {
-                app.manage(CliState { file_path: Some(file_path) });
-            } else {
-                app.manage(CliState { file_path: None });
-            }
+            let options = parse_cli_options(&args);
+            app.manage(CliState { options });
 
             Ok(())
         })
@@ -102,21 +103,61 @@ pub fn run() {
 }
 
 // Internal helper to parse CLI args
-fn get_cli_file_path_internal(args: &[String]) -> Option<String> {
-    for i in 0..args.len() {
-        if args[i] == "open" && i + 1 < args.len() {
-            return Some(args[i + 1].clone());
+fn parse_cli_options(args: &[String]) -> CliOptions {
+    let mut options = CliOptions::default();
+    let mut positionals = Vec::new();
+    let mut i = 1;
+
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--bundle-dir" || arg == "--principles" || arg == "--out" {
+            if i + 1 < args.len() {
+                let value = args[i + 1].clone();
+                match arg.as_str() {
+                    "--bundle-dir" => options.bundle_dir = Some(value),
+                    "--principles" => options.principles_path = Some(value),
+                    "--out" => options.out_path = Some(value),
+                    _ => {}
+                }
+                i += 2;
+                continue;
+            }
         }
+        if let Some(value) = arg.strip_prefix("--bundle-dir=") {
+            options.bundle_dir = Some(value.to_string());
+            i += 1;
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--principles=") {
+            options.principles_path = Some(value.to_string());
+            i += 1;
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--out=") {
+            options.out_path = Some(value.to_string());
+            i += 1;
+            continue;
+        }
+        if arg.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        positionals.push(arg.clone());
+        i += 1;
     }
 
-    if args.len() > 1 && !args[1].starts_with('-') && args[1] != "open" {
-        return Some(args[1].clone());
+    if let Some(open_index) = positionals.iter().position(|arg| arg == "open") {
+        if let Some(path) = positionals.get(open_index + 1) {
+            options.file_path = Some(path.clone());
+        }
+    } else if let Some(path) = positionals.get(0) {
+        options.file_path = Some(path.clone());
     }
 
-    None
+    options
 }
 
 // State struct to hold CLI arguments
 struct CliState {
-    file_path: Option<String>,
+    options: CliOptions,
 }

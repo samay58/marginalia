@@ -33,14 +33,16 @@ function getBaseName(path) {
  * @param {string} sourceFile
  * @param {DiffResult} diffResult
  * @param {number} sessionDuration - Duration in seconds
+ * @param {string | null} principlesPath
  * @returns {object}
  */
-export function generateChangesJson(sourceFile, diffResult, sessionDuration) {
+export function generateChangesJson(sourceFile, diffResult, sessionDuration, principlesPath) {
   return {
     marginalia_version: '1.0',
     source_file: sourceFile,
     reviewed_at: new Date().toISOString(),
     session_duration_seconds: sessionDuration,
+    principles_path: principlesPath || null,
     changes: diffResult.changes.map(change => ({
       id: change.id,
       type: change.type,
@@ -213,6 +215,7 @@ export function generateSummaryMarkdown(filename, diffResult, annotations, gener
  * @param {Map<string, Annotation>} options.annotations
  * @param {string} options.generalNotes
  * @param {Date} options.startTime
+ * @param {string | null} [options.principlesPath]
  * @returns {object} Bundle with all file contents
  */
 export function generateBundle({
@@ -223,6 +226,7 @@ export function generateBundle({
   annotations,
   generalNotes,
   startTime,
+  principlesPath,
 }) {
   const filename = filePath.split('/').pop() || 'untitled.md';
   const baseName = getBaseName(filePath);
@@ -236,7 +240,7 @@ export function generateBundle({
       'original.md': originalContent,
       'final.md': editedContent,
       'changes.json': JSON.stringify(
-        generateChangesJson(filePath, diffResult, sessionDuration),
+        generateChangesJson(filePath, diffResult, sessionDuration, principlesPath),
         null,
         2
       ),

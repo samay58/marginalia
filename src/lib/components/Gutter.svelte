@@ -1,26 +1,54 @@
 <script>
-  import { linesWithChanges, linesWithAnnotations, currentLine } from '../stores/app.js';
+  import { linesWithChanges, linesWithAnnotations, linesWithSlop, currentLine } from '../stores/app.js';
 
-  /** @type {{ lineCount?: number, onLineClick?: (line: number) => void }} */
+  /** @type {{ lineCount?: number, onLineClick?: (line: number, x: number, y: number) => void, onScroll?: (scrollTop: number) => void }} */
   let {
     lineCount = 1,
-    onLineClick = () => {}
+    onLineClick = () => {},
+    onScroll = () => {}
   } = $props();
+
+  /** @type {HTMLDivElement | null} */
+  let gutterEl = $state(null);
+
+  function handleScroll(event) {
+    onScroll(event.currentTarget.scrollTop);
+  }
+
+  export function setScrollTop(scrollTop) {
+    if (!gutterEl) return;
+    if (Math.abs(gutterEl.scrollTop - scrollTop) < 1) return;
+    gutterEl.scrollTop = scrollTop;
+  }
+
+  export function getLineRect(lineNumber) {
+    if (!gutterEl) return null;
+    const target = gutterEl.querySelector(`[data-line="${lineNumber}"]`);
+    return target ? target.getBoundingClientRect() : null;
+  }
 </script>
 
-<div class="gutter no-select">
+<div class="gutter no-select" bind:this={gutterEl} onscroll={handleScroll}>
   {#each Array(lineCount) as _, i}
     {@const lineNum = i + 1}
     {@const hasChange = $linesWithChanges.has(lineNum)}
     {@const hasAnnotation = $linesWithAnnotations.has(lineNum)}
+    {@const hasSlop = $linesWithSlop.has(lineNum)}
     {@const isActive = $currentLine === lineNum}
     <button
       class="line-number"
       class:active={isActive}
       class:has-change={hasChange}
-      onclick={() => onLineClick(lineNum)}
+      data-line={lineNum}
+      onclick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        onLineClick(lineNum, rect.right + 8, rect.top);
+      }}
     >
       <span class="number">{lineNum}</span>
+      {#if hasSlop}
+        <span class="slop-flag" title="WRITING.md violation">!</span>
+      {/if}
       {#if hasChange}
         <span
           class="indicator"
@@ -88,6 +116,14 @@
     width: 12px;
     text-align: center;
     transition: color var(--transition-fast);
+  }
+
+  .slop-flag {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--accent);
+    width: 10px;
+    text-align: center;
   }
 
   .indicator.filled {

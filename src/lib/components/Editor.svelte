@@ -5,8 +5,10 @@
   import { listener, listenerCtx } from '@milkdown/plugin-listener';
   import { replaceAll, getMarkdown } from '@milkdown/utils';
   import { createDiffPlugin, triggerDiffUpdate } from '../utils/milkdown-diff-plugin.js';
+  import { createSlopPlugin, triggerSlopUpdate } from '../utils/milkdown-slop-plugin.js';
+  import { buildTextMap } from '../utils/prosemirror-text.js';
 
-  /** @type {{ content?: string, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void }} */
+  /** @type {{ content?: string, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[] }} */
   let {
     content = '',
     onChange = () => {},
@@ -14,7 +16,9 @@
     onInitialRender = () => {},
     onLineChange = () => {},
     getDiffResult = () => null,
-    onClickChange = () => {}
+    onClickChange = () => {},
+    onScroll = () => {},
+    getSlopMatchers = () => []
   } = $props();
 
   /** @type {HTMLDivElement} */
@@ -28,31 +32,6 @@
   let hasCalledInitialRender = false;
 
   /**
-   * Extract plain text from ProseMirror document
-   * @param {import('@milkdown/prose/model').Node} doc
-   * @returns {string}
-   */
-  /**
-   * Extract plain text from ProseMirror document.
-   * IMPORTANT: Do NOT trim - offsets must match exactly with textOffsetToDocPos
-   * @param {import('@milkdown/prose/model').Node} doc
-   * @returns {string}
-   */
-  function extractPlainText(doc) {
-    let text = '';
-    doc.descendants((node) => {
-      if (node.isText) {
-        text += node.text;
-      } else if (node.isBlock && text.length > 0 && !text.endsWith('\n')) {
-        text += '\n';
-      }
-      return true;
-    });
-    // Don't trim! Offsets must match exactly between this and textOffsetToDocPos
-    return text;
-  }
-
-  /**
    * Get current plain text from editor
    */
   function getCurrentPlainText() {
@@ -60,7 +39,7 @@
     try {
       const view = editor.ctx.get(editorViewCtx);
       if (view) {
-        return extractPlainText(view.state.doc);
+        return buildTextMap(view.state.doc).text;
       }
     } catch (e) {
       console.error('Failed to extract plain text:', e);
@@ -91,8 +70,10 @@
                 onPlainTextChange(plainText);
               }
 
-              // Schedule diff decoration update after store processes the change
-              // Use requestAnimationFrame for more reliable timing than setTimeout
+              // Schedule diff decoration update after stores have processed the change.
+              // The plugin's apply() runs during docChanged but with stale diff data.
+              // Text verification in the plugin returns empty decorations for stale diffs.
+              // This rAF triggers a second pass with fresh diff data from updated stores.
               requestAnimationFrame(() => {
                 if (editor) {
                   triggerDiffUpdate(editor);
@@ -104,6 +85,7 @@
         .use(commonmark)
         .use(listener)
         .use(createDiffPlugin(getDiffResult, onClickChange))
+        .use(createSlopPlugin(getSlopMatchers))
         .create();
 
       isReady = true;
@@ -146,6 +128,25 @@
     } catch (e) {
       // Ignore errors during initialization
     }
+  }
+
+  function handleScroll(event) {
+    onScroll(event.currentTarget.scrollTop);
+  }
+
+  function getLineHeightPx() {
+    if (typeof window === 'undefined') return 0;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const raw = rootStyle.getPropertyValue('--line-height').trim();
+    const rootFontSize = parseFloat(rootStyle.fontSize) || 16;
+    if (raw.endsWith('rem')) {
+      return parseFloat(raw) * rootFontSize;
+    }
+    if (raw.endsWith('px')) {
+      return parseFloat(raw);
+    }
+    const parsed = parseFloat(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
 
   onMount(() => {
@@ -230,9 +231,31 @@
       console.error('Failed to refresh diff:', e);
     }
   }
+
+  export function refreshSlop() {
+    if (!editor || !isReady) return;
+    try {
+      triggerSlopUpdate(editor);
+    } catch (e) {
+      console.error('Failed to refresh slop:', e);
+    }
+  }
+
+  export function setScrollTop(scrollTop) {
+    if (!editorContainer) return;
+    if (Math.abs(editorContainer.scrollTop - scrollTop) < 1) return;
+    editorContainer.scrollTop = scrollTop;
+  }
+
+  export function scrollToLine(lineNumber) {
+    if (!editorContainer) return;
+    const lineHeight = getLineHeightPx() || 27;
+    const targetTop = Math.max(0, Math.round((lineNumber - 1) * lineHeight));
+    editorContainer.scrollTo({ top: targetTop, behavior: 'auto' });
+  }
 </script>
 
-<div class="editor-wrapper" bind:this={editorContainer}></div>
+<div class="editor-wrapper" bind:this={editorContainer} onscroll={handleScroll}></div>
 
 <style>
   .editor-wrapper {
@@ -401,5 +424,12 @@
   .editor-wrapper :global(.struck:hover),
   .editor-wrapper :global(.added:hover) {
     filter: brightness(0.95);
+  }
+
+  .editor-wrapper :global(.slop-violation) {
+    background: var(--accent-subtle);
+    box-shadow: inset 0 -1px 0 var(--accent);
+    border-radius: 2px;
+    padding: 0 1px;
   }
 </style>

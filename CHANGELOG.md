@@ -2,6 +2,21 @@
 
 All notable changes to Marginalia.
 
+## [Unreleased]
+
+### Added
+- CLI flags: `--bundle-dir`, `--out`, `--principles`
+- Auto-match annotations to WRITING.md rules when a principles file is available
+- Anti-slop highlights for banned words and em-dashes from WRITING.md
+
+### Fixed
+- Render diff decorations in the editor (Milkdown diff plugin)
+- Sync gutter/editor scrolling and scroll editor to clicked gutter line
+- Anchor popovers to clicked element bounds (no fixed offsets)
+- Close the window after bundle save (Tauri close + exit)
+- Prevent diff widgets from blocking editor clicks
+- Limit anti-slop highlights to pre-edit state for stability
+
 ## [0.1.0] - 2026-01-19
 
 ### Implemented (Aligned with Spec)
@@ -18,8 +33,8 @@ All notable changes to Marginalia.
 - [x] Basic layout: header, gutter, editor, notes panel
 
 #### Phase 2: Editor
-- [x] CodeMirror 6 integration
-- [x] Custom Paper & Ink theme for CodeMirror
+- [x] Milkdown (ProseMirror) integration
+- [x] Custom Paper & Ink theme for editor
 - [x] Serif body text in editor (manuscript feel)
 - [x] Gutter with line numbers
 - [x] Edit indicators (○ empty, ● filled with rationale)
@@ -67,36 +82,31 @@ All notable changes to Marginalia.
 - [x] `⌘ Enter` - Same as Esc
 - [x] `⌘ /` - Add comment to current line
 - [x] `⌘ G` - Toggle general notes
-- [x] `⌘ Z` / `⌘ ⇧ Z` - Undo/Redo (via CodeMirror)
+- [x] `⌘ Z` / `⌘ ⇧ Z` - Undo/Redo
 
 ---
 
 ## Deferred to v1.5 (Per Spec)
 
 ### Anti-Slop Detection
-- [ ] Scan original draft for WRITING.md violations
-- [ ] Highlight em-dashes, banned words, hedging phrases
-- [ ] Visual flags in gutter before user starts editing
+- [x] Scan original draft for WRITING.md violations
+- [x] Highlight em-dashes and banned words
+- [x] Visual flags in gutter before user starts editing
 
 ### WRITING.md Integration
-- [ ] Read `~/phoenix/WRITING.md` for existing principles
-- [ ] Auto-match annotations to existing rules
-- [ ] Surface matched rules in `summary_for_agent.md`
+- [x] Read `~/phoenix/WRITING.md` for existing principles
+- [x] Auto-match annotations to existing rules
+- [x] Surface matched rules in `summary_for_agent.md`
 
 ---
 
 ## Known Gaps (v0.1 → v0.2)
 
 ### Minor Missing Features
-1. **Visual diff decorations not applied** - CSS classes exist but diff isn't actively rendered in editor yet
-2. **Window close after save** - Currently just logs; needs `window.close()` implementation
-3. **CLI flags not implemented**: `--bundle-dir`, `--principles`, `--out`
-4. **Animations** - Minimal; spec mentioned more polish
+1. **Animations** - Minimal; spec mentioned more polish
 
 ### Technical Debt
-1. **Gutter scroll sync** - Gutter scrolls independently from editor
-2. **Line height alignment** - Approximate; may drift on long documents
-3. **Popover positioning** - Uses fixed offset; should position relative to actual line
+1. **Line height alignment** - Approximate; may drift on long documents
 
 ---
 
@@ -143,7 +153,7 @@ All phase epics created and closed:
 ### Technical
 - [ ] Cold start < 500ms (not measured yet - needs Tauri build)
 - [x] Diff < 100ms (diff-match-patch is fast)
-- [x] No typing jank (CodeMirror handles this)
+- [x] No typing jank (editor handles this)
 - [x] Bundle generates correctly
 
 ### Feel

@@ -41,8 +41,11 @@ pnpm tauri build
 # Open a file for review
 marginalia open ./ic-memo-draft.md
 
-# With custom bundle directory
-marginalia open ./draft.md --bundle-dir ~/phoenix/.marginalia/bundles
+# Custom bundle directory + scripting output
+marginalia open ./draft.md \
+  --bundle-dir ~/phoenix/.marginalia/bundles \
+  --out /tmp/marginalia.bundle-path.txt \
+  --principles ~/phoenix/WRITING.md
 ```
 
 ### Claude Code Hook Integration
@@ -78,10 +81,15 @@ Files matching these patterns will automatically open in Marginalia:
 |-----|--------|
 | `Esc` | Close, output bundle |
 | `⌘ Enter` | Same as Esc |
+| `⌘ O` | Open file picker |
 | `⌘ /` | Add comment to current edit |
 | `⌘ G` | Toggle general notes |
 | `⌘ Z` | Undo |
 | `⌘ ⇧ Z` | Redo |
+
+## Anti-Slop Highlights
+
+If a WRITING.md principles file is available, banned words and em-dashes are highlighted in the editor and flagged in the gutter before you start editing.
 
 ## Bundle Output
 
@@ -95,13 +103,20 @@ When you close Marginalia, it generates a bundle at:
 - `annotations.json` - Your rationales and categories
 - `summary_for_agent.md` - Human-readable summary for Claude
 
+**CLI flags:**
+- `--bundle-dir` overrides the bundle output directory
+- `--out` writes the saved bundle path to a file (for scripting)
+- `--principles` records a WRITING.md path in `changes.json`
+
+When a principles file is available, annotations auto-match rules and surface them in `summary_for_agent.md`.
+
 ## Technical Stack
 
 | Component | Choice |
 |-----------|--------|
 | **Shell** | Tauri 2.0 |
 | **Frontend** | Svelte 5 |
-| **Editor** | CodeMirror 6 |
+| **Editor** | Milkdown (ProseMirror) |
 | **Diff** | diff-match-patch |
 | **Styling** | Vanilla CSS (no Tailwind) |
 

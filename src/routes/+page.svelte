@@ -1,10 +1,12 @@
 <script>
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
   import Header from '$lib/components/Header.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import Gutter from '$lib/components/Gutter.svelte';
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
+  import { createViolationMatchers, createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
     filePath,
@@ -16,10 +18,12 @@
     diffResult,
     currentLine,
     annotations,
+    slopMatchers,
     startTime,
     initializeWithContent,
     updateContent,
     updateGeneralNotes,
+    setSlopMatchers,
     setAnnotation,
     removeAnnotation,
     setOriginalPlainText,
@@ -37,6 +41,13 @@
   let popoverText = $state('');
   let popoverRationale = $state('');
   let isDark = $state(false);
+  let gutterRef;
+  let editorRef;
+  let isSyncingScroll = false;
+  let cliBundleDir = $state('');
+  let cliOutPath = $state('');
+  let cliPrinciplesPath = $state('');
+  let writingRuleMatcher = $state(null);
 
   // Sample content for testing (when no CLI file is provided)
   const sampleContent = `# Investment Memo: ElevenLabs
@@ -62,13 +73,25 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
   onMount(async () => {
     // Check for CLI file path
     try {
-      const cliPath = await invoke('get_cli_file_path');
+      const cliOptions = await invoke('get_cli_options');
+      const cliPath = cliOptions?.filePath;
+      cliBundleDir = cliOptions?.bundleDir || '';
+      cliOutPath = cliOptions?.outPath || '';
+      cliPrinciplesPath = cliOptions?.principlesPath || '';
+      const homeDir = await invoke('get_home_dir');
+      const defaultPrinciplesPath = `${homeDir}/phoenix/WRITING.md`;
+      const resolvedPrinciplesPath = cliPrinciplesPath || defaultPrinciplesPath;
+      await loadWritingRules(resolvedPrinciplesPath);
       if (cliPath) {
         const content = await invoke('read_file', { path: cliPath });
         initializeWithContent(cliPath, content);
       } else {
-        // Use sample content for testing
-        initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+        // No CLI file - show file picker
+        const picked = await pickAndLoadFile();
+        if (!picked) {
+          // User cancelled - use sample content for demo
+          initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+        }
       }
     } catch (e) {
       console.error('Error loading file:', e);
@@ -101,10 +124,59 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     };
   });
 
+  async function loadWritingRules(principlesPath) {
+    if (!principlesPath) return;
+    try {
+      const rulesText = await invoke('read_file', { path: principlesPath });
+      const matcher = createWritingRuleMatcher(rulesText);
+      writingRuleMatcher = matcher.match;
+      const matchers = createViolationMatchers(rulesText);
+      setSlopMatchers(matchers);
+      editorRef?.refreshSlop();
+      if (!cliPrinciplesPath) {
+        cliPrinciplesPath = principlesPath;
+      }
+    } catch (e) {
+      console.warn('WRITING.md not available for rule matching:', e);
+    }
+  }
+
+  /**
+   * Show file picker and load the selected file
+   * @returns {Promise<boolean>} true if a file was loaded, false if cancelled
+   */
+  async function pickAndLoadFile() {
+    try {
+      const selected = await openFileDialog({
+        multiple: false,
+        filters: [{
+          name: 'Markdown',
+          extensions: ['md', 'markdown', 'txt']
+        }]
+      });
+
+      if (selected) {
+        const filePath = typeof selected === 'string' ? selected : selected.path;
+        const content = await invoke('read_file', { path: filePath });
+        initializeWithContent(filePath, content);
+        editorRef?.refreshSlop();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Error picking file:', e);
+      return false;
+    }
+  }
+
   async function handleDone() {
     if (!$diffResult || $diffResult.changes.length === 0) {
       console.log('No changes to save');
-      // TODO: Close window
+      try {
+        await invoke('close_window');
+      } catch (e) {
+        console.error('Error closing window:', e);
+      }
       return;
     }
 
@@ -117,6 +189,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       annotations: $annotations,
       generalNotes: $generalNotes,
       startTime: $startTime,
+      principlesPath: cliPrinciplesPath || null,
     });
 
     console.log('Generated bundle:', bundle.bundleName);
@@ -124,7 +197,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     try {
       // Get home directory and save bundle
       const homeDir = await invoke('get_home_dir');
-      const bundleDir = `${homeDir}/phoenix/.marginalia/bundles`;
+      const bundleDir = cliBundleDir || `${homeDir}/phoenix/.marginalia/bundles`;
 
       const savedPath = await invoke('save_bundle', {
         bundleDir,
@@ -133,6 +206,10 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       });
 
       console.log('Bundle saved to:', savedPath);
+
+      if (cliOutPath) {
+        await invoke('write_file', { path: cliOutPath, content: `${savedPath}\n` });
+      }
 
       // Close window after saving
       await invoke('close_window');
@@ -161,6 +238,11 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       // Open popover for current line if there's a change there
       handleGutterLineClick($currentLine);
     }
+    if (event.metaKey && event.key === 'o') {
+      event.preventDefault();
+      // Open file picker to load a different file
+      pickAndLoadFile();
+    }
   }
 
   function handleContentChange(content) {
@@ -179,7 +261,15 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     currentLine.set(line);
   }
 
-  function handleGutterLineClick(line) {
+  function positionPopoverAt(x, y) {
+    const margin = 16;
+    const maxX = window.innerWidth - 320 - margin;
+    const maxY = window.innerHeight - 350;
+    popoverX = Math.min(Math.max(margin, x), maxX);
+    popoverY = Math.min(Math.max(80, y), maxY);
+  }
+
+  function handleGutterLineClick(line, x, y) {
     if (!$diffResult) return;
 
     // Find changes on this line
@@ -189,9 +279,22 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     const change = lineChanges[0];
     const existingAnnotation = $annotations.get(change.id);
 
-    // Position popover near the gutter
-    popoverX = 80;
-    popoverY = (line - 1) * 27 + 100; // Approximate based on line height
+    editorRef?.scrollToLine(line);
+
+    let anchorX = x;
+    let anchorY = y;
+    if (typeof anchorX !== 'number' || typeof anchorY !== 'number') {
+      const rect = gutterRef?.getLineRect(line);
+      if (rect) {
+        anchorX = rect.right + 8;
+        anchorY = rect.top;
+      }
+    }
+    if (typeof anchorX === 'number' && typeof anchorY === 'number') {
+      positionPopoverAt(anchorX, anchorY);
+    } else {
+      positionPopoverAt(120, 120);
+    }
 
     popoverChangeId = change.id;
     popoverText = change.text;
@@ -202,11 +305,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
   function handleEditorChangeClick(changeId, text, x, y) {
     const existingAnnotation = $annotations.get(changeId);
 
-    // Position popover to the right side of the editor area
     // x and y come from the clicked element's bounding rect
-    const editorRight = window.innerWidth - 100; // Leave some margin
-    popoverX = Math.min(x, editorRight - 320); // 320 = popover width
-    popoverY = Math.max(80, Math.min(y, window.innerHeight - 350));
+    positionPopoverAt(x, y);
 
     popoverChangeId = changeId;
     popoverText = text;
@@ -218,13 +318,32 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     updateGeneralNotes(event.target.value);
   }
 
+  function handleEditorScroll(scrollTop) {
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    gutterRef?.setScrollTop(scrollTop);
+    requestAnimationFrame(() => {
+      isSyncingScroll = false;
+    });
+  }
+
+  function handleGutterScroll(scrollTop) {
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    editorRef?.setScrollTop(scrollTop);
+    requestAnimationFrame(() => {
+      isSyncingScroll = false;
+    });
+  }
+
   function handlePopoverSave(event) {
     const { changeId, rationale, category } = event.detail;
+    const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
     setAnnotation(changeId, {
       changeIds: [changeId],
       rationale,
       category,
-      writingMdRule: null, // TODO: Match against WRITING.md
+      writingMdRule: matchedRule,
       principleCandidate: false,
     });
     popoverVisible = false;
@@ -257,12 +376,15 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
 
   <main class="main">
     <Gutter
+      bind:this={gutterRef}
       {lineCount}
       onLineClick={handleGutterLineClick}
+      onScroll={handleGutterScroll}
     />
 
     <div class="editor-container">
       <Editor
+        bind:this={editorRef}
         content={$editedContent}
         onChange={handleContentChange}
         onPlainTextChange={handlePlainTextChange}
@@ -270,6 +392,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
         onLineChange={handleLineChange}
         getDiffResult={() => $diffResult}
         onClickChange={handleEditorChangeClick}
+        onScroll={handleEditorScroll}
+        getSlopMatchers={() => ($hasChanges ? [] : $slopMatchers)}
       />
     </div>
   </main>
