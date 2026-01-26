@@ -8,39 +8,13 @@ const diffPluginKey = new PluginKey('marginalia-diff');
 
 /**
  * Create a deletion widget (struck-through text)
- * If deletion spans multiple lines, render as block to preserve formatting
+ * If deletion spans multiple lines, preserve whitespace without inserting block-level DOM
  */
 function createDeletionWidget(change, onClick) {
   const hasNewlines = change.text.includes('\n');
 
-  if (hasNewlines) {
-    // Block-level deletion - preserve line structure
-    const container = document.createElement('div');
-    container.className = 'struck struck-block';
-    container.setAttribute('contenteditable', 'false');
-    container.dataset.changeId = change.id;
-    container.dataset.changeText = change.text;
-    container.dataset.changeType = 'deletion';
-
-    // Split by newlines and create spans for each line
-    const lines = change.text.split('\n');
-    lines.forEach((line, i) => {
-      if (line) {
-        const lineSpan = document.createElement('span');
-        lineSpan.textContent = line;
-        container.appendChild(lineSpan);
-      }
-      if (i < lines.length - 1) {
-        container.appendChild(document.createElement('br'));
-      }
-    });
-
-    return container;
-  }
-
-  // Inline deletion
   const span = document.createElement('span');
-  span.className = 'struck';
+  span.className = hasNewlines ? 'struck struck-block' : 'struck';
   span.textContent = change.text;
   span.setAttribute('contenteditable', 'false');
   span.dataset.changeId = change.id;
@@ -101,11 +75,10 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
       );
     } else if (change.type === 'insertion') {
       // Inline decoration - highlights the inserted text
-      // Calculate end position: find last character's position and add 1
-      // (offsets[i] gives START of char i, we need position AFTER last char)
-      const lastCharOffset = change.editedOffset + change.text.length - 1;
-      const lastCharPos = offsetToPos(lastCharOffset);
-      const endPos = lastCharPos !== null ? lastCharPos + 1 : null;
+      // Use an exclusive end offset so we highlight the full insertion.
+      // offsets[endOffset] maps to the position *after* the last inserted char.
+      const endOffset = change.editedOffset + change.text.length;
+      const endPos = offsetToPos(endOffset);
 
       if (endPos !== null && endPos > docPos) {
         decorations.push(

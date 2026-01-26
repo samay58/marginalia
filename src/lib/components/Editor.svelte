@@ -5,6 +5,7 @@
   import { listener, listenerCtx } from '@milkdown/plugin-listener';
   import { replaceAll, getMarkdown } from '@milkdown/utils';
   import { createDiffPlugin, triggerDiffUpdate } from '../utils/milkdown-diff-plugin.js';
+  import { historyKeymapPlugin, historyPlugin } from '../utils/milkdown-history-plugin.js';
   import { createSlopPlugin, triggerSlopUpdate } from '../utils/milkdown-slop-plugin.js';
   import { buildTextMap } from '../utils/prosemirror-text.js';
 
@@ -86,6 +87,8 @@
           });
         })
         .use(commonmark)
+        .use(historyPlugin)
+        .use(historyKeymapPlugin)
         .use(listener)
         .use(createDiffPlugin(getDiffResult, onClickChange))
         .use(createSlopPlugin(getSlopMatchers))
@@ -417,13 +420,15 @@
     padding: 1px 2px;
     border-radius: 2px;
     cursor: pointer;
+    white-space: pre-wrap;
   }
 
   .editor-wrapper :global(.struck-block) {
-    display: block;
-    margin: var(--space-2) 0;
+    display: inline-block;
+    margin: 0;
     padding: var(--space-2) var(--space-3);
     border-left: 2px solid var(--struck-line);
+    max-width: 100%;
   }
 
   .editor-wrapper :global(.struck-block span) {
@@ -437,6 +442,7 @@
     padding: 1px 2px;
     border-radius: 2px;
     cursor: pointer;
+    white-space: pre-wrap;
   }
 
   .editor-wrapper :global(.struck:hover),

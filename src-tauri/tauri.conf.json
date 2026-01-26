@@ -20,7 +20,8 @@
         "center": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "decorations": true
+        "decorations": true,
+        "closable": false
       }
     ],
     "security": {

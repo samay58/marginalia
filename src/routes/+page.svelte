@@ -28,9 +28,12 @@
     setAnnotation,
     removeAnnotation,
     setOriginalPlainText,
+    originalPlainText,
     updatePlainText,
+    editedPlainText,
   } from '$lib/stores/app.js';
   import { generateBundle } from '$lib/utils/bundle.js';
+  import { computeDiff } from '$lib/utils/diff.js';
 
   // Local state
   let notesExpanded = $state(false);
@@ -212,9 +215,14 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
   }
 
   async function handleDone() {
-    // No changes case - write status and close
-    if (!$diffResult || $diffResult.changes.length === 0) {
-      console.log('No changes to save');
+    const changesMade = $hasChanges;
+    const hasNotes = typeof $generalNotes === 'string' && $generalNotes.trim().length > 0;
+    const hasAnnotations = $annotations instanceof Map && $annotations.size > 0;
+    const shouldCreateBundle = changesMade || hasNotes || hasAnnotations;
+
+    // No feedback case - write status and close
+    if (!shouldCreateBundle) {
+      console.log('No changes or notes to save');
       try {
         if (cliOutPath) {
           await invoke('write_file', {
@@ -229,12 +237,21 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       return;
     }
 
+    // If diffResult isn't ready (plain text not initialized yet), compute it directly.
+    // Prefer plain text (what the user sees) to keep change IDs aligned with annotations.
+    const originalTextForDiff = $originalPlainText || $originalContent || '';
+    const editedTextForDiff = $editedPlainText || $editedContent || '';
+    const diffForBundle =
+      !$diffResult || (changesMade && $diffResult.changes.length === 0)
+        ? computeDiff(originalTextForDiff, editedTextForDiff)
+        : $diffResult;
+
     // Generate the bundle
     const bundle = generateBundle({
       filePath: $filePath,
       originalContent: $originalContent,
       editedContent: $editedContent,
-      diffResult: $diffResult,
+      diffResult: diffForBundle,
       annotations: $annotations,
       generalNotes: $generalNotes,
       startTime: $startTime,
@@ -260,7 +277,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       if (cliOutPath) {
         await invoke('write_file', {
           path: cliOutPath,
-          content: buildStatus('reviewed', true, savedPath)
+          content: buildStatus('reviewed', changesMade, savedPath)
         });
       }
 
