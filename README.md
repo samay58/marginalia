@@ -1,109 +1,117 @@
 # Marginalia
 
-A native macOS app for reviewing AI-generated drafts. Make edits, explain why, and output structured feedback for Claude to process.
+Marginalia is a native macOS app that opens inside your Claude Code session when Claude writes a draft. You edit inline, add short rationales ("no hedging," "quantify the miss"), and press Esc. Claude reads the structured output and revises without you ever leaving the CLI.
 
-## Philosophy
+No more describing your edits in prose. No more Claude misinterpreting half of them.
 
-Your edits teach the AI. The AI applies the revisions. Marginalia is the bridge.
+## Before and after
 
-**Your workflow today:**
+### Without Marginalia
+
 1. Claude drafts an IC memo
-2. You copy to Obsidian or editor, mark it up
-3. You describe changes in prose to Claude
+2. You copy it to Obsidian, mark it up
+3. You describe your changes back to Claude
 4. Claude misinterprets half of them
 5. You repeat
 
-**With Marginalia:**
-1. Claude writes draft to `03-work/nventures/deals/elevenlabs/ic-memo-draft.md`
-2. Marginalia opens automatically (PostToolUse hook)
-3. You edit inline, add 3-word rationales ("no hedging", "quantify the miss")
-4. Press Esc. Bundle outputs. Claude reads it, revises correctly.
-5. Stable patterns promote to WRITING.md via `/reflect`
+### With Marginalia
 
-## Install (macOS)
+1. Claude writes to `ic-memo-draft.md`
+2. Marginalia opens automatically
+3. You edit inline, add 3-word rationales
+4. Press Esc. Claude reads structured output. Revises correctly.
+5. Patterns that stick get promoted to `WRITING.md` via `/reflect`.
+
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samay58/marginalia/main/scripts/install.sh | bash
 ```
 
-Optional during install:
+With Claude Code hooks:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash -s -- --with-claude --global
+curl -fsSL https://raw.githubusercontent.com/samay58/marginalia/main/scripts/install.sh | bash -s -- --with-claude --global
 ```
 
-Hook requirement: `jq` (install via `brew install jq`).
+Needs jq (`brew install jq`).
 
-Optional Claude Code setup (per-project or global):
+## Setup
 
 ```bash
-marginalia init
-marginalia init --global
+marginalia init          # per-project
+marginalia init --global # global
+marginalia smoke-test    # verify it works
 ```
 
-Smoke test (opens Marginalia and blocks until you exit):
+## How to use it
+
+### Open a file
 
 ```bash
-marginalia smoke-test
+marginalia open ./draft.md
 ```
 
-## Developer Quick Start
+### With options
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Development
-pnpm tauri dev
-
-# Build for production
-pnpm tauri build
-```
-
-## Usage
-
-### Manual Launch
-
-```bash
-# Open a file for review
-marginalia open ./ic-memo-draft.md
-
-# Custom bundle directory + scripting output
 marginalia open ./draft.md \
   --bundle-dir ~/phoenix/.marginalia/bundles \
   --out /tmp/marginalia.bundle-path.txt \
   --principles ~/phoenix/WRITING.md
 ```
 
-### Leaving Feedback Without Editing Text
+### Leave feedback without editing
 
-Sometimes you don’t want to touch the draft — you just want to tell the model what to change.
+Press `⌘ G` for General Notes. Type what you want changed. Press Esc.
 
-1. Open **General notes** (click the bar at the bottom, or press `⌘ G`)
-2. Type your feedback
-3. Press `Esc` (or click **Done**) to save
+This still creates a bundle. Claude reads `summary_for_agent.md`.
 
-That still creates a bundle and the hook will point Claude at `summary_for_agent.md`.
+`⌘ Q` cancels -- no bundle created.
 
-**Important**: `⌘ Q` cancels the session (no bundle).
+### Add rationales to edits
 
-### Annotations (Rationales)
+Annotations anchor to edits. Make a change, then press `⌘ /` to explain why.
 
-Annotations are attached to a specific edit (a diff change). If there are no changes, there’s nothing to anchor an annotation to.
+## Shortcuts
 
-- Make a small edit on a line
-- Press `⌘ /` (or click the highlighted change / gutter marker) to add a rationale
+| Key | Action |
+|-----|--------|
+| Esc | Close and output bundle |
+| ⌘ Enter | Same as Esc |
+| ⌘ O | Open file |
+| ⌘ / | Comment on current edit |
+| ⌘ G | General notes |
+| ⌘ Z | Undo |
+| ⌘ ⇧ Z | Redo |
 
-### Claude Code Hook Integration
+## Anti-slop
 
-Quick setup (recommended):
+Marginalia highlights AI-ish writing. If you have a `WRITING.md` file, it flags banned words and em-dashes. The built-in tone lint catches phrases like "I hope this finds you well" and "cutting-edge."
+
+## What gets output
+
+When you close Marginalia, it writes a bundle to:
+
+`~/phoenix/.marginalia/bundles/[timestamp]_[filename]/`
+
+- `original.md` -- What you started with
+- `final.md` -- What you changed it to
+- `changes.json` -- Structured diff
+- `annotations.json` -- Your rationales
+- `summary_for_agent.md` -- For Claude to read
+
+If you set a principles file, annotations auto-match your rules and show up in the summary.
+
+## Claude Code integration
+
+The hook setup:
 
 ```bash
-marginalia init          # writes ./.claude/settings.json
-marginalia init --global # writes ~/.claude/settings.json
+marginalia init --global
 ```
 
-Add to `~/.claude/settings.json`:
+Or manually in `~/.claude/settings.json`:
 
 ```json
 {
@@ -124,118 +132,67 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-If you cloned the repo, point the command to your local path (e.g., `bash ~/marginalia/hooks/post-write.sh`).
+Auto-opens for:
 
-Files matching these patterns will automatically open in Marginalia:
 - `*-draft.md` in deal folders
 - `draft-*.md` in career exploration
 - Any file with `<!-- REVIEW -->` marker
 
-## Testing
+## Design philosophy
 
-Run the interactive smoke test:
+Paper & Ink. A manuscript marked up with a fountain pen -- not an app with colored badges.
+
+Warm off-white backgrounds. Deep ink (not pure black). Struck text in muted brick. Additions in verdigris. Charter for body text.
+
+## Stack
+
+| Component | Choice |
+|-----------|--------|
+| Shell | Tauri 2.0 |
+| Frontend | Svelte 5 |
+| Editor | Milkdown (ProseMirror) |
+| Diff | diff-match-patch |
+| Styling | Vanilla CSS |
+
+## Development
 
 ```bash
-./scripts/smoke-hook.sh
+pnpm install
+pnpm tauri dev   # development
+pnpm tauri build # production
 ```
 
-Or use the CLI wrapper (installed via the one-command installer):
+Output: `target/release/bundle/macos/Marginalia.app`
+
+## Testing
 
 ```bash
 marginalia smoke-test
+
+# or
+./scripts/smoke-hook.sh
 ```
 
-Tone lint check (optional):
+Tone lint check:
 
 ```bash
 ./scripts/make-slop-fixture.sh
 ./src-tauri/target/debug/marginalia open /tmp/marginalia-slop.md
 ```
 
-## Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Esc` | Close, output bundle |
-| `⌘ Enter` | Same as Esc |
-| `⌘ O` | Open file picker |
-| `⌘ /` | Add comment to current edit |
-| `⌘ G` | Toggle general notes |
-| `⌘ Z` | Undo |
-| `⌘ ⇧ Z` | Redo |
-
-## Anti-Slop Highlights
-
-If a WRITING.md principles file is available, banned words and em-dashes are highlighted in the editor and flagged in the gutter. Marginalia also ships a tone lint pack (e.g., “I hope this finds you well”, “cutting-edge”) that highlights AI-ish phrasing and stays active while you edit.
-
-## Bundle Output
-
-When you close Marginalia, it generates a bundle at:
-`~/phoenix/.marginalia/bundles/[timestamp]_[filename]/`
-
-**Files generated:**
-- `original.md` - Original content
-- `final.md` - Your edited version
-- `changes.json` - Structured diff data
-- `annotations.json` - Your rationales and categories
-- `summary_for_agent.md` - Human-readable summary for Claude
-
-**CLI flags:**
-- `--bundle-dir` overrides the bundle output directory
-- `--out` writes the saved bundle path to a file (for scripting)
-- `--principles` records a WRITING.md path in `changes.json`
-
-When a principles file is available, annotations auto-match rules and surface them in `summary_for_agent.md`. Tone + slop flags are summarized under “Tone & Slop Flags” with suggestions.
-
-## Technical Stack
-
-| Component | Choice |
-|-----------|--------|
-| **Shell** | Tauri 2.0 |
-| **Frontend** | Svelte 5 |
-| **Editor** | Milkdown (ProseMirror) |
-| **Diff** | diff-match-patch |
-| **Styling** | Vanilla CSS (no Tailwind) |
-
-## Design Aesthetic
-
-Paper & Ink - editorial markup on quality paper. A manuscript annotated with a fountain pen, not an app with colored badges.
-
-- Warm, off-white paper backgrounds
-- Deep, warm ink colors (not pure black)
-- Struck text in muted brick (old correction marks)
-- Added text in deep verdigris (editorial insertions)
-- Serif body text (Charter) for manuscript feel
-
-## Project Structure
+## Structure
 
 ```
 marginalia/
 ├── src/                      # Svelte frontend
 │   ├── lib/
-│   │   ├── components/       # Editor, Gutter, Popover, Header
-│   │   ├── stores/           # Svelte stores for state
-│   │   └── utils/            # diff, bundle generator
-│   └── routes/               # SvelteKit pages
+│   │   ├── components/
+│   │   ├── stores/
+│   │   └── utils/
+│   └── routes/
 ├── src-tauri/                # Rust backend
-├── hooks/                    # Claude Code hook scripts
+├── hooks/                    # Claude Code hooks
 └── README.md
-```
-
-## Development
-
-```bash
-# Run development server
-pnpm tauri dev
-
-# Build frontend only
-pnpm build
-
-# Build full app
-pnpm tauri build
-
-# The built app will be at:
-# target/release/bundle/macos/Marginalia.app
 ```
 
 ## License
