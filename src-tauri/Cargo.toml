@@ -1,6 +1,6 @@
 [package]
 name = "marginalia"
-version = "0.1.1"
+version = "0.1.2"
 description = "Feedback interface for AI-assisted writing"
 authors = ["Samay Dhawan"]
 edition = "2021"

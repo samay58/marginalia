@@ -8,6 +8,10 @@
 
 ## Steps
 
+0. Verify the hook loop locally:
+   - Run `./scripts/smoke-hook.sh`
+   - Make a tiny edit or add General Notes (`Cmd+G`), then press `Esc`
+   - Confirm it prints an agent-readable `summary_for_agent.md` path
 1. Update `src-tauri/tauri.conf.json` version and `CHANGELOG.md`
 2. Run `pnpm install`
 3. Run `./scripts/release.sh` (optional tag: `./scripts/release.sh v0.1.1`)

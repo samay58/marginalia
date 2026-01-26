@@ -4,6 +4,13 @@ All notable changes to Marginalia.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-01-26
+
+### Changed
+- Public docs scrub: removed internal files and local path references
+- Default bundle output directory is now `~/.marginalia/bundles/`
+- Claude Code hook triggers are now generic (`*-draft.md` or `<!-- REVIEW -->`), with optional `MARGINALIA_REVIEW_REGEX`
+
 ## [0.1.1] - 2026-01-26
 
 ### Added
