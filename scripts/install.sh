@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Marginalia"
-REPO="${MARGINALIA_REPO:-samaydhawan/marginalia}"
+REPO="${MARGINALIA_REPO:-samay58/marginalia}"
 REF="${MARGINALIA_REF:-}"
 DMG_URL="${MARGINALIA_DMG_URL:-}"
 APP_DIR="${MARGINALIA_APP_DIR:-/Applications}"
@@ -23,7 +23,7 @@ Options:
   --with-claude          Write Claude Code hook config after install
   --global               Use ~/.claude/settings.json (default: per-project)
   --project              Use ./.claude/settings.json
-  --repo <owner/name>    GitHub repo (default: samaydhawan/marginalia)
+  --repo <owner/name>    GitHub repo (default: samay58/marginalia)
   --ref <tag>            Release tag or ref (default: latest release)
   --dmg-url <url>        Direct DMG download URL
   --app-dir <path>       Install directory for Marginalia.app

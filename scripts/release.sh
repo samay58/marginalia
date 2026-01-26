@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${MARGINALIA_REPO:-samaydhawan/marginalia}"
+REPO="${MARGINALIA_REPO:-samay58/marginalia}"
 TAG="${1:-}"
 
 require_cmd() {

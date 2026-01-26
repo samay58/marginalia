@@ -6,7 +6,7 @@ APP_PATH="${MARGINALIA_APP_PATH:-/Applications/${APP_NAME}.app}"
 HOOK_DIR="${MARGINALIA_HOOK_DIR:-${HOME}/.marginalia/hooks}"
 HOOK_PATH="${HOOK_DIR}/post-write.sh"
 HOOK_MATCHER="${MARGINALIA_HOOK_MATCHER:-Write|Edit}"
-REPO="${MARGINALIA_REPO:-samaydhawan/marginalia}"
+REPO="${MARGINALIA_REPO:-samay58/marginalia}"
 REF="${MARGINALIA_REF:-main}"
 
 usage() {

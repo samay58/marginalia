@@ -74,7 +74,7 @@ All notable changes to Marginalia.
   - `summary_for_agent.md`
 - [x] Rust backend for file I/O
 - [x] CLI argument parsing (`marginalia open <file>`)
-- [x] Bundle saves to `~/phoenix/.marginalia/bundles/`
+- [x] Bundle saves to `~/.marginalia/bundles/`
 
 #### Phase 6: Polish
 - [x] Dark mode support (follows system preference)
@@ -85,8 +85,6 @@ All notable changes to Marginalia.
 - [x] Claude Code PostToolUse hook script
 - [x] Pattern matching for `-draft.md` files
 - [x] `<!-- REVIEW -->` marker detection
-- [x] Phoenix `.marginalia/` directory setup
-- [x] Added to Phoenix `.gitignore`
 
 ### Keyboard Shortcuts
 - [x] `Esc` - Close and output bundle
@@ -105,7 +103,7 @@ All notable changes to Marginalia.
 - [x] Visual flags in gutter before user starts editing
 
 ### WRITING.md Integration
-- [x] Read `~/phoenix/WRITING.md` for existing principles
+- [x] Read a user-provided principles file (`--principles`) for existing rules
 - [x] Auto-match annotations to existing rules
 - [x] Surface matched rules in `summary_for_agent.md`
 
@@ -134,22 +132,6 @@ The implementation followed the spec closely. Key decisions preserved:
 1. **Svelte 5 syntax** - Used new `$props()` runes instead of `export let`
 2. **Event handlers** - Used `onclick` instead of deprecated `on:click`
 3. **State management** - Svelte stores + local `$state()` hybrid
-
----
-
-## Beads Issue Tracking
-
-All phase epics created and closed:
-
-| ID | Phase | Status |
-|----|-------|--------|
-| marg-6h8 | Phase 1: Foundation | ✓ Closed |
-| marg-8i1 | Phase 2: Editor | ✓ Closed |
-| marg-7mw | Phase 3: Diff | ✓ Closed |
-| marg-43w | Phase 4: Comments | ✓ Closed |
-| marg-3oo | Phase 5: Output | ✓ Closed |
-| marg-6oa | Phase 6: Polish | ✓ Closed |
-| marg-ate | Phase 7: Integration | ✓ Closed |
 
 ---
 

@@ -23,6 +23,15 @@
 
 set -euo pipefail
 
+# Optional override:
+# - If MARGINALIA_REVIEW_REGEX is set, any file_path matching the bash regex triggers review.
+# - Otherwise, default triggers are:
+#   - file name ends with "-draft.md"
+#   - file content contains "<!-- REVIEW -->"
+#
+# Example:
+#   export MARGINALIA_REVIEW_REGEX='/(docs|drafts)/.*\\.md$'
+
 # Resolve repo root (don’t assume location on disk)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -42,22 +51,19 @@ fi
 # Determine if this file should be reviewed
 should_review=false
 
-# Pattern 1: Deal drafts with -draft.md suffix in NVentures deals folder
-if [[ "$file_path" == */03-work/nventures/deals/*-draft.md ]]; then
-    should_review=true
+# Optional override: explicit regex match against the file path
+if [[ -n "${MARGINALIA_REVIEW_REGEX:-}" ]]; then
+    if [[ "$file_path" =~ ${MARGINALIA_REVIEW_REGEX} ]]; then
+        should_review=true
+    fi
 fi
 
-# Pattern 2: Career exploration drafts
-if [[ "$file_path" == */02-personal/career-exploration/*/draft-*.md ]]; then
-    should_review=true
-fi
-
-# Pattern 3: Any file containing the <!-- REVIEW --> marker
+# Default trigger: any file containing the <!-- REVIEW --> marker
 if [[ -n "$content" && "$content" == *"<!-- REVIEW -->"* ]]; then
     should_review=true
 fi
 
-# Pattern 4: Files ending in -draft.md anywhere
+# Default trigger: files ending in -draft.md anywhere
 if [[ "$file_path" == *-draft.md ]]; then
     should_review=true
 fi
@@ -117,7 +123,7 @@ launch_and_wait() {
         return
     fi
 
-    output_hook_response "Marginalia hook matched, but no runnable app was found. Build once with: cd ~/marginalia && pnpm tauri build (recommended) or run pnpm tauri dev (then retry)."
+    output_hook_response "Marginalia hook matched, but no runnable app was found. Install/build Marginalia, then retry (from source: `pnpm tauri build`)."
     exit 0
 }
 

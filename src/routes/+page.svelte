@@ -86,25 +86,23 @@
   }
 
   // Sample content for testing (when no CLI file is provided)
-  const sampleContent = `# Investment Memo: ElevenLabs
+  const sampleContent = `# Draft: Product Brief
 
-## Executive Summary
+## What this is
 
-I believe this represents a compelling opportunity for NVIDIA to invest in the leading voice AI platform. The company has demonstrated remarkable growth, achieving significant revenue milestones while maintaining strong unit economics.
+This is a working draft. Mark it up. Leave short rationales. Press Esc.
 
-## Key Highlights
+## The problem
 
-- **Revenue Growth**: The company has experienced substantial year-over-year growth
-- **Market Position**: ElevenLabs has arguably become the de facto standard for voice synthesis
-- **Technology**: Their proprietary models potentially outperform all competitors
+Right now, the feedback loop is slow and ambiguous. I want a tighter loop that preserves intent.
 
-## Financial Overview
+## Proposed solution
 
-The company missed targets in Q3 but recovered strongly. Furthermore, their burn rate has improved significantly.
+Open a lightweight review surface directly from the CLI session, capture edits + intent, and hand the agent a structured summary it can apply.
 
-## Recommendation
+## Notes
 
-Additionally, we recommend a $25M investment at the proposed valuation. This would position NVIDIA well for the emerging voice AI market.`;
+Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
     /** @type {() => void} */
@@ -118,10 +116,11 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
         cliBundleDir = cliOptions?.bundleDir || '';
         cliOutPath = cliOptions?.outPath || '';
         cliPrinciplesPath = cliOptions?.principlesPath || '';
-        const homeDir = await invoke('get_home_dir');
-        const defaultPrinciplesPath = `${homeDir}/phoenix/WRITING.md`;
-        const resolvedPrinciplesPath = cliPrinciplesPath || defaultPrinciplesPath;
-        await loadWritingRules(resolvedPrinciplesPath);
+        // Always enable built-in tone lint. If a principles file is provided, extend matchers with it.
+        setSlopMatchers(createToneMatchers());
+        if (cliPrinciplesPath) {
+          await loadWritingRules(cliPrinciplesPath);
+        }
         if (cliPath) {
           const content = await invoke('read_file', { path: cliPath });
           initializeWithContent(cliPath, content);
@@ -130,13 +129,14 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
           const picked = await pickAndLoadFile();
           if (!picked) {
             // User cancelled - use sample content for demo
-            initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+            initializeWithContent('/test/draft.md', sampleContent);
           }
         }
       } catch (e) {
         console.error('Error loading file:', e);
         // Fallback to sample content
-        initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+        setSlopMatchers(createToneMatchers());
+        initializeWithContent('/test/draft.md', sampleContent);
       }
 
       // Listen for close-requested events (Cmd+Q, red button)
@@ -398,7 +398,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     try {
       // Get home directory and save bundle
       const homeDir = await invoke('get_home_dir');
-      const bundleDir = cliBundleDir || `${homeDir}/phoenix/.marginalia/bundles`;
+      const bundleDir = cliBundleDir || `${homeDir}/.marginalia/bundles`;
 
       const savedPath = await invoke('save_bundle', {
         bundleDir,
