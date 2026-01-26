@@ -4,6 +4,8 @@ All notable changes to Marginalia.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-01-26
+
 ### Added
 - CLI flags: `--bundle-dir`, `--out`, `--principles`
 - One-command installer script + CLI wrapper (`marginalia init`, `marginalia smoke-test`)
