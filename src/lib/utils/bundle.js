@@ -7,6 +7,7 @@
  * @typedef {import('../stores/app.js').Annotation} Annotation
  * @typedef {import('./diff.js').Change} Change
  * @typedef {import('./diff.js').DiffResult} DiffResult
+ * @typedef {{ label: string, line: number, match: string, snippet: string, category?: string | null, suggestion?: string | null }} LintFinding
  */
 
 /**
@@ -108,9 +109,17 @@ export function generateAnnotationsJson(annotations, diffResult, generalNotes) {
  * @param {Map<string, Annotation>} annotations
  * @param {string} generalNotes
  * @param {number} sessionDuration
+ * @param {LintFinding[]} [lintFindings]
  * @returns {string}
  */
-export function generateSummaryMarkdown(filename, diffResult, annotations, generalNotes, sessionDuration) {
+export function generateSummaryMarkdown(
+  filename,
+  diffResult,
+  annotations,
+  generalNotes,
+  sessionDuration,
+  lintFindings = []
+) {
   const lines = [];
   const minutes = Math.round(sessionDuration / 60);
 
@@ -179,6 +188,19 @@ export function generateSummaryMarkdown(filename, diffResult, annotations, gener
     num++;
   }
 
+  if (lintFindings.length > 0) {
+    lines.push('## Tone & Slop Flags');
+    for (const finding of lintFindings) {
+      const category = finding.category ? `[${finding.category}] ` : '';
+      const preview = finding.snippet || finding.match;
+      lines.push(`- ${category}${finding.label} (line ${finding.line}): "${preview}"`);
+      if (finding.suggestion) {
+        lines.push(`  - Suggestion: ${finding.suggestion}`);
+      }
+    }
+    lines.push('');
+  }
+
   // General notes
   if (generalNotes) {
     lines.push('## General');
@@ -216,7 +238,8 @@ export function generateSummaryMarkdown(filename, diffResult, annotations, gener
  * @param {string} options.generalNotes
  * @param {Date} options.startTime
  * @param {string | null} [options.principlesPath]
- * @returns {object} Bundle with all file contents
+ * @param {LintFinding[]} [options.lintFindings]
+ * @returns {{ bundleName: string, files: Record<string, string> }} Bundle with all file contents
  */
 export function generateBundle({
   filePath,
@@ -227,6 +250,7 @@ export function generateBundle({
   generalNotes,
   startTime,
   principlesPath,
+  lintFindings = [],
 }) {
   const filename = filePath.split('/').pop() || 'untitled.md';
   const baseName = getBaseName(filePath);
@@ -240,7 +264,7 @@ export function generateBundle({
       'original.md': originalContent,
       'final.md': editedContent,
       'changes.json': JSON.stringify(
-        generateChangesJson(filePath, diffResult, sessionDuration, principlesPath),
+        generateChangesJson(filePath, diffResult, sessionDuration, principlesPath ?? null),
         null,
         2
       ),
@@ -254,7 +278,8 @@ export function generateBundle({
         diffResult,
         annotations,
         generalNotes,
-        sessionDuration
+        sessionDuration,
+        lintFindings
       ),
     },
   };

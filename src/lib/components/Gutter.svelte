@@ -11,16 +11,19 @@
   /** @type {HTMLDivElement | null} */
   let gutterEl = $state(null);
 
+  /** @param {Event & { currentTarget: HTMLElement }} event */
   function handleScroll(event) {
     onScroll(event.currentTarget.scrollTop);
   }
 
+  /** @param {number} scrollTop */
   export function setScrollTop(scrollTop) {
     if (!gutterEl) return;
     if (Math.abs(gutterEl.scrollTop - scrollTop) < 1) return;
     gutterEl.scrollTop = scrollTop;
   }
 
+  /** @param {number} lineNumber */
   export function getLineRect(lineNumber) {
     if (!gutterEl) return null;
     const target = gutterEl.querySelector(`[data-line="${lineNumber}"]`);
@@ -28,7 +31,7 @@
   }
 </script>
 
-<div class="gutter no-select" bind:this={gutterEl} onscroll={handleScroll}>
+<div class="gutter no-select glass-surface" bind:this={gutterEl} onscroll={handleScroll}>
   {#each Array(lineCount) as _, i}
     {@const lineNum = i + 1}
     {@const hasChange = $linesWithChanges.has(lineNum)}
@@ -47,7 +50,7 @@
     >
       <span class="number">{lineNum}</span>
       {#if hasSlop}
-        <span class="slop-flag" title="WRITING.md violation">!</span>
+        <span class="slop-flag" title="Tone or WRITING.md flag">!</span>
       {/if}
       {#if hasChange}
         <span
@@ -65,7 +68,7 @@
 <style>
   .gutter {
     width: var(--gutter-width);
-    background: var(--paper-matte);
+    background: transparent;
     border-right: var(--border-subtle);
     padding-top: var(--space-4);
     overflow-y: auto;

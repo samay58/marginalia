@@ -31,6 +31,7 @@
   let isInternalUpdate = false;
   let lastKnownContent = '';
   let hasCalledInitialRender = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let diffUpdateTimeout = null;
   const DIFF_DEBOUNCE_MS = 150; // Wait for typing pause before updating decorations
 
@@ -50,6 +51,7 @@
     return '';
   }
 
+  /** @param {string} initialContent */
   async function initEditor(initialContent) {
     if (!editorContainer) return;
 
@@ -69,9 +71,7 @@
 
               // Also send plain text for accurate diffing
               const plainText = getCurrentPlainText();
-              if (plainText) {
-                onPlainTextChange(plainText);
-              }
+              onPlainTextChange(plainText);
 
               // Debounce diff decoration updates to reduce visual jumpiness
               // Wait for user to pause typing before recalculating decorations
@@ -126,7 +126,7 @@
         let line = 1;
         doc.descendants((node, nodePos) => {
           if (nodePos >= pos) return false;
-          if (node.isBlock) line++;
+          if (node.isTextblock) line++;
           return true;
         });
         onLineChange(Math.max(1, line));
@@ -136,6 +136,7 @@
     }
   }
 
+  /** @param {Event & { currentTarget: HTMLElement }} event */
   function handleScroll(event) {
     onScroll(event.currentTarget.scrollTop);
   }
@@ -250,12 +251,14 @@
     }
   }
 
+  /** @param {number} scrollTop */
   export function setScrollTop(scrollTop) {
     if (!editorContainer) return;
     if (Math.abs(editorContainer.scrollTop - scrollTop) < 1) return;
     editorContainer.scrollTop = scrollTop;
   }
 
+  /** @param {number} lineNumber */
   export function scrollToLine(lineNumber) {
     if (!editorContainer) return;
     const lineHeight = getLineHeightPx() || 27;
@@ -412,6 +415,16 @@
   }
 
   /* Diff decorations - these will be applied via plugin */
+  .editor-wrapper :global(.struck-wrapper) {
+    cursor: pointer;
+    white-space: pre-wrap;
+    transition: opacity var(--transition-fast);
+  }
+
+  .editor-wrapper :global(.struck-space) {
+    white-space: pre-wrap;
+  }
+
   .editor-wrapper :global(.struck) {
     background-color: var(--struck-bg);
     color: var(--struck-text);
@@ -421,6 +434,15 @@
     border-radius: 2px;
     cursor: pointer;
     white-space: pre-wrap;
+    transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .editor-wrapper :global(.struck-tight-left) {
+    padding-left: 0;
+  }
+
+  .editor-wrapper :global(.struck-tight-right) {
+    padding-right: 0;
   }
 
   .editor-wrapper :global(.struck-block) {
@@ -431,7 +453,7 @@
     max-width: 100%;
   }
 
-  .editor-wrapper :global(.struck-block span) {
+  .editor-wrapper :global(.struck-block .struck-core) {
     text-decoration: line-through;
     text-decoration-color: var(--struck-line);
   }
@@ -443,6 +465,7 @@
     border-radius: 2px;
     cursor: pointer;
     white-space: pre-wrap;
+    transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
   }
 
   .editor-wrapper :global(.struck:hover),

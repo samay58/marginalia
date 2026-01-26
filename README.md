@@ -159,7 +159,8 @@ Warm off-white backgrounds. Deep ink (not pure black). Struck text in muted bric
 ```bash
 pnpm install
 pnpm tauri dev   # development
-pnpm tauri build # production
+pnpm tauri build # production app bundle
+pnpm tauri:build:dmg # DMG (requires GUI)
 ```
 
 Output: `target/release/bundle/macos/Marginalia.app`

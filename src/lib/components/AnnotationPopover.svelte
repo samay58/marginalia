@@ -13,6 +13,7 @@
   } = $props();
 
   let rationale = $state('');
+  /** @type {HTMLInputElement | null} */
   let inputEl = $state(null);
 
   // Category suggestions
@@ -50,6 +51,7 @@
     close();
   }
 
+  /** @param {KeyboardEvent} event */
   function handleKeydown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();

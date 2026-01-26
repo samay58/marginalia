@@ -1,7 +1,13 @@
 use std::fs;
+#[cfg(debug_assertions)]
+use std::net::{TcpStream, ToSocketAddrs};
+#[cfg(debug_assertions)]
+use std::time::Duration;
 use std::path::PathBuf;
 use serde::Serialize;
 use tauri::Manager;
+#[cfg(debug_assertions)]
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +102,27 @@ pub fn run() {
             let options = parse_cli_options(&args);
             app.manage(CliState { options });
 
+            #[cfg(debug_assertions)]
+            {
+                if !dev_server_running_with_retry() {
+                    let app_handle = app.handle().clone();
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                    app_handle
+                        .dialog()
+                        .message(
+                            "Marginalia dev server isn’t running.\n\nStart it with `pnpm tauri dev`, or use the release binary (`pnpm tauri build`).",
+                        )
+                        .title("Marginalia")
+                        .kind(MessageDialogKind::Error)
+                        .buttons(MessageDialogButtons::Ok)
+                        .show(move |_| {
+                            app_handle.exit(0);
+                        });
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -155,6 +182,81 @@ fn parse_cli_options(args: &[String]) -> CliOptions {
     }
 
     options
+}
+
+#[cfg(debug_assertions)]
+fn dev_server_running() -> bool {
+    let url = std::env::var("TAURI_DEV_SERVER_URL")
+        .or_else(|_| std::env::var("TAURI_DEV_URL"))
+        .unwrap_or_else(|_| "http://localhost:1420".to_string());
+
+    let Some((host, port)) = parse_host_port(&url) else {
+        return false;
+    };
+
+    let mut hosts = vec![host.clone()];
+    if host.eq_ignore_ascii_case("localhost") {
+        hosts.push("127.0.0.1".to_string());
+        hosts.push("::1".to_string());
+    }
+
+    hosts.into_iter().any(|host| connect_host_port(&host, port))
+}
+
+#[cfg(debug_assertions)]
+fn parse_host_port(url: &str) -> Option<(String, u16)> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let (scheme, without_scheme) = if let Some(rest) = trimmed.strip_prefix("https://") {
+        ("https", rest)
+    } else if let Some(rest) = trimmed.strip_prefix("http://") {
+        ("http", rest)
+    } else {
+        ("http", trimmed)
+    };
+
+    let host_port = without_scheme.split('/').next().unwrap_or(without_scheme);
+    if host_port.is_empty() {
+        return None;
+    }
+
+    let mut parts = host_port.split(':');
+    let host = parts.next()?.to_string();
+    let port = parts
+        .next()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or_else(|| if scheme == "https" { 443 } else { 80 });
+
+    Some((host, port))
+}
+
+#[cfg(debug_assertions)]
+fn connect_host_port(host: &str, port: u16) -> bool {
+    let Ok(addrs) = (host, port).to_socket_addrs() else {
+        return false;
+    };
+    for addr in addrs {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(debug_assertions)]
+fn dev_server_running_with_retry() -> bool {
+    let attempts = 10;
+    let delay = Duration::from_millis(200);
+    for _ in 0..attempts {
+        if dev_server_running() {
+            return true;
+        }
+        std::thread::sleep(delay);
+    }
+    false
 }
 
 // State struct to hold CLI arguments

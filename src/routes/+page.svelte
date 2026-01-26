@@ -8,6 +8,8 @@
   import Gutter from '$lib/components/Gutter.svelte';
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
   import { createViolationMatchers, createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
+  import { createToneMatchers } from '$lib/utils/tone-lint.js';
+  import { collectLintFindings } from '$lib/utils/lint.js';
   import {
     filename,
     filePath,
@@ -45,14 +47,22 @@
   let popoverText = $state('');
   let popoverRationale = $state('');
   let isDark = $state(false);
-  let gutterRef;
-  let editorRef;
+  /** @type {any} */
+  let gutterRef = null;
+  /** @type {any} */
+  let editorRef = null;
   let isSyncingScroll = false;
+  /** @type {Array<{ path: string, name: string, content: string }>} */
+  let referenceFiles = $state([]);
+  let activeReferenceIndex = $state(0);
   let cliBundleDir = $state('');
   let cliOutPath = $state('');
   let cliPrinciplesPath = $state('');
+  /** @type {null | ((rationale: string) => string | null)} */
   let writingRuleMatcher = $state(null);
+  /** @type {null | (() => void)} */
   let closeRequestedUnlisten = null;
+  const REF_STORAGE_KEY = 'marginalia.references';
 
   /**
    * Build a JSON status object for the hook to parse
@@ -62,6 +72,7 @@
    * @param {string | null} errorMessage
    */
   function buildStatus(status, changesMade, bundlePath, errorMessage = null) {
+    /** @type {{ status: 'reviewed' | 'cancelled' | 'error', changes_made: boolean, bundle_path: string | null, session_duration_seconds: number, error?: string }} */
     const statusObj = {
       status,
       changes_made: changesMade,
@@ -95,80 +106,103 @@ The company missed targets in Q3 but recovered strongly. Furthermore, their burn
 
 Additionally, we recommend a $25M investment at the proposed valuation. This would position NVIDIA well for the emerging voice AI market.`;
 
-  onMount(async () => {
-    // Check for CLI file path
-    try {
-      const cliOptions = await invoke('get_cli_options');
-      const cliPath = cliOptions?.filePath;
-      cliBundleDir = cliOptions?.bundleDir || '';
-      cliOutPath = cliOptions?.outPath || '';
-      cliPrinciplesPath = cliOptions?.principlesPath || '';
-      const homeDir = await invoke('get_home_dir');
-      const defaultPrinciplesPath = `${homeDir}/phoenix/WRITING.md`;
-      const resolvedPrinciplesPath = cliPrinciplesPath || defaultPrinciplesPath;
-      await loadWritingRules(resolvedPrinciplesPath);
-      if (cliPath) {
-        const content = await invoke('read_file', { path: cliPath });
-        initializeWithContent(cliPath, content);
-      } else {
-        // No CLI file - show file picker
-        const picked = await pickAndLoadFile();
-        if (!picked) {
-          // User cancelled - use sample content for demo
-          initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+  onMount(() => {
+    /** @type {() => void} */
+    let cleanup = () => {};
+
+    const init = async () => {
+      // Check for CLI file path
+      try {
+        const cliOptions = await invoke('get_cli_options');
+        const cliPath = cliOptions?.filePath;
+        cliBundleDir = cliOptions?.bundleDir || '';
+        cliOutPath = cliOptions?.outPath || '';
+        cliPrinciplesPath = cliOptions?.principlesPath || '';
+        const homeDir = await invoke('get_home_dir');
+        const defaultPrinciplesPath = `${homeDir}/phoenix/WRITING.md`;
+        const resolvedPrinciplesPath = cliPrinciplesPath || defaultPrinciplesPath;
+        await loadWritingRules(resolvedPrinciplesPath);
+        if (cliPath) {
+          const content = await invoke('read_file', { path: cliPath });
+          initializeWithContent(cliPath, content);
+        } else {
+          // No CLI file - show file picker
+          const picked = await pickAndLoadFile();
+          if (!picked) {
+            // User cancelled - use sample content for demo
+            initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
+          }
         }
+      } catch (e) {
+        console.error('Error loading file:', e);
+        // Fallback to sample content
+        initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
       }
-    } catch (e) {
-      console.error('Error loading file:', e);
-      // Fallback to sample content
-      initializeWithContent('/test/ic-memo-elevenlabs.md', sampleContent);
-    }
 
-    // Listen for close-requested events (Cmd+Q, red button)
-    // With closable: false in tauri.conf.json, all close actions route through this
-    closeRequestedUnlisten = await listen('tauri://close-requested', async () => {
-      console.log('Close requested - writing cancelled status');
-      if (cliOutPath) {
-        try {
-          await invoke('write_file', {
-            path: cliOutPath,
-            content: buildStatus('cancelled', false, null)
-          });
-        } catch (e) {
-          console.error('Failed to write cancelled status:', e);
+      // Listen for close-requested events (Cmd+Q, red button)
+      // With closable: false in tauri.conf.json, all close actions route through this
+      closeRequestedUnlisten = await listen('tauri://close-requested', async () => {
+        console.log('Close requested - writing cancelled status');
+        if (cliOutPath) {
+          try {
+            await invoke('write_file', {
+              path: cliOutPath,
+              content: buildStatus('cancelled', false, null)
+            });
+          } catch (e) {
+            console.error('Failed to write cancelled status:', e);
+          }
         }
+        await invoke('close_window');
+      });
+
+      // Update line count when rendered text changes
+      const unsubscribe = editedPlainText.subscribe((text) => {
+        lineCount = (text.match(/\n/g) || []).length + 1;
+      });
+
+      // Check for dark mode preference
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
       }
-      await invoke('close_window');
-    });
 
-    // Update line count when content changes
-    const unsubscribe = editedContent.subscribe((content) => {
-      lineCount = (content.match(/\n/g) || []).length + 1;
-    });
+      // Listen for dark mode changes
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      /** @param {MediaQueryListEvent} e */
+      const handleChange = (e) => {
+        isDark = e.matches;
+        document.documentElement.classList.toggle('dark', isDark);
+      };
+      mediaQuery.addEventListener('change', handleChange);
 
-    // Check for dark mode preference
-    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    }
+      await restoreReferenceFiles();
 
-    // Listen for dark mode changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      isDark = e.matches;
-      document.documentElement.classList.toggle('dark', isDark);
+      return () => {
+        unsubscribe();
+        mediaQuery.removeEventListener('change', handleChange);
+        if (closeRequestedUnlisten) {
+          closeRequestedUnlisten();
+        }
+      };
     };
-    mediaQuery.addEventListener('change', handleChange);
+
+    init()
+      .then((teardown) => {
+        if (typeof teardown === 'function') {
+          cleanup = teardown;
+        }
+      })
+      .catch((e) => {
+        console.error('Error initializing app:', e);
+      });
 
     return () => {
-      unsubscribe();
-      mediaQuery.removeEventListener('change', handleChange);
-      if (closeRequestedUnlisten) {
-        closeRequestedUnlisten();
-      }
+      cleanup();
     };
   });
 
+  /** @param {string} principlesPath */
   async function loadWritingRules(principlesPath) {
     if (!principlesPath) return;
     try {
@@ -176,13 +210,80 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       const matcher = createWritingRuleMatcher(rulesText);
       writingRuleMatcher = matcher.match;
       const matchers = createViolationMatchers(rulesText);
-      setSlopMatchers(matchers);
+      const toneMatchers = createToneMatchers();
+      setSlopMatchers([...matchers, ...toneMatchers]);
       editorRef?.refreshSlop();
       if (!cliPrinciplesPath) {
         cliPrinciplesPath = principlesPath;
       }
     } catch (e) {
       console.warn('WRITING.md not available for rule matching:', e);
+      const toneMatchers = createToneMatchers();
+      setSlopMatchers(toneMatchers);
+      editorRef?.refreshSlop();
+    }
+  }
+
+  /**
+   * @param {string[]} paths
+   */
+  function saveReferencePaths(paths) {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(REF_STORAGE_KEY, JSON.stringify(paths));
+  }
+
+  /**
+   * @returns {string[]}
+   */
+  function loadReferencePaths() {
+    if (typeof localStorage === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(REF_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((p) => typeof p === 'string') : [];
+    } catch (e) {
+      console.warn('Failed to read reference files from storage:', e);
+      return [];
+    }
+  }
+
+  /**
+   * @param {string} filePath
+   */
+  async function addReferenceFile(filePath) {
+    if (!filePath) return;
+    try {
+      const content = await invoke('read_file', { path: filePath });
+      const name = filePath.split('/').pop() || filePath;
+      const updated = [
+        { path: filePath, name, content },
+        ...referenceFiles.filter((ref) => ref.path !== filePath),
+      ].slice(0, 3);
+      referenceFiles = updated;
+      activeReferenceIndex = 0;
+      saveReferencePaths(updated.map((ref) => ref.path));
+    } catch (e) {
+      console.error('Failed to load reference file:', e);
+    }
+  }
+
+  async function restoreReferenceFiles() {
+    const paths = loadReferencePaths();
+    if (paths.length === 0) return;
+    const loaded = [];
+    for (const path of paths) {
+      try {
+        const content = await invoke('read_file', { path });
+        const name = path.split('/').pop() || path;
+        loaded.push({ path, name, content });
+      } catch (e) {
+        console.warn(`Reference file missing or unreadable: ${path}`);
+      }
+    }
+    if (loaded.length > 0) {
+      referenceFiles = loaded.slice(0, 3);
+      activeReferenceIndex = 0;
     }
   }
 
@@ -192,6 +293,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
    */
   async function pickAndLoadFile() {
     try {
+      /** @type {any} */
       const selected = await openFileDialog({
         multiple: false,
         filters: [{
@@ -210,6 +312,35 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       return false;
     } catch (e) {
       console.error('Error picking file:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Show file picker and add as a reference file
+   * @returns {Promise<boolean>} true if a file was loaded, false if cancelled
+   */
+  async function pickReferenceFile() {
+    try {
+      /** @type {any} */
+      const selected = await openFileDialog({
+        multiple: false,
+        filters: [{
+          name: 'Markdown',
+          extensions: ['md', 'markdown', 'txt']
+        }]
+      });
+
+      if (selected) {
+        const filePath = typeof selected === 'string' ? selected : selected.path;
+        if (filePath) {
+          await addReferenceFile(filePath);
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      console.error('Error picking reference file:', e);
       return false;
     }
   }
@@ -246,7 +377,10 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
         ? computeDiff(originalTextForDiff, editedTextForDiff)
         : $diffResult;
 
+    const lintFindings = collectLintFindings(editedTextForDiff, $slopMatchers);
+
     // Generate the bundle
+    /** @type {{ bundleName: string, files: Record<string, string> }} */
     const bundle = generateBundle({
       filePath: $filePath,
       originalContent: $originalContent,
@@ -256,6 +390,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       generalNotes: $generalNotes,
       startTime: $startTime,
       principlesPath: cliPrinciplesPath || null,
+      lintFindings,
     });
 
     console.log('Generated bundle:', bundle.bundleName);
@@ -288,9 +423,10 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       // Write error status
       if (cliOutPath) {
         try {
+          const errorMessage = e instanceof Error ? e.message : String(e);
           await invoke('write_file', {
             path: cliOutPath,
-            content: buildStatus('error', false, null, e.toString())
+            content: buildStatus('error', false, null, errorMessage)
           });
         } catch (writeErr) {
           console.error('Failed to write error status:', writeErr);
@@ -299,6 +435,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     }
   }
 
+  /** @param {KeyboardEvent} event */
   function handleKeydown(event) {
     if (event.key === 'Escape') {
       if (popoverVisible) {
@@ -317,31 +454,41 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     if (event.metaKey && event.key === '/') {
       event.preventDefault();
       // Open popover for current line if there's a change there
-      handleGutterLineClick($currentLine);
+      handleGutterLineClick($currentLine ?? 1);
     }
-    if (event.metaKey && event.key === 'o') {
+    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      pickReferenceFile();
+      return;
+    }
+    if (event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'o') {
       event.preventDefault();
       // Open file picker to load a different file
       pickAndLoadFile();
     }
   }
 
+  /** @param {string} content */
   function handleContentChange(content) {
     updateContent(content);
   }
 
+  /** @param {string} text */
   function handlePlainTextChange(text) {
     updatePlainText(text);
   }
 
+  /** @param {string} text */
   function handleInitialRender(text) {
     setOriginalPlainText(text);
   }
 
+  /** @param {number} line */
   function handleLineChange(line) {
     currentLine.set(line);
   }
 
+  /** @param {number} x @param {number} y */
   function positionPopoverAt(x, y) {
     const margin = 16;
     const maxX = window.innerWidth - 320 - margin;
@@ -350,7 +497,8 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     popoverY = Math.min(Math.max(80, y), maxY);
   }
 
-  function handleGutterLineClick(line, x, y) {
+  /** @param {number} line @param {number} [x] @param {number} [y] */
+  function handleGutterLineClick(line, x = NaN, y = NaN) {
     if (!$diffResult) return;
 
     // Find changes on this line
@@ -383,6 +531,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     popoverVisible = true;
   }
 
+  /** @param {string} changeId @param {string} text @param {number} x @param {number} y */
   function handleEditorChangeClick(changeId, text, x, y) {
     const existingAnnotation = $annotations.get(changeId);
 
@@ -395,10 +544,12 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     popoverVisible = true;
   }
 
+  /** @param {Event & { currentTarget: HTMLTextAreaElement }} event */
   function handleNotesChange(event) {
-    updateGeneralNotes(event.target.value);
+    updateGeneralNotes(event.currentTarget.value);
   }
 
+  /** @param {number} scrollTop */
   function handleEditorScroll(scrollTop) {
     if (isSyncingScroll) return;
     isSyncingScroll = true;
@@ -408,6 +559,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     });
   }
 
+  /** @param {number} scrollTop */
   function handleGutterScroll(scrollTop) {
     if (isSyncingScroll) return;
     isSyncingScroll = true;
@@ -417,6 +569,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     });
   }
 
+  /** @param {{ changeId: string, rationale: string, category?: string }} data */
   function handlePopoverSave(data) {
     const { changeId, rationale, category } = data;
     const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
@@ -430,6 +583,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     popoverVisible = false;
   }
 
+  /** @param {{ changeId: string }} data */
   function handlePopoverRemove(data) {
     const { changeId } = data;
     removeAnnotation(changeId);
@@ -474,12 +628,40 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
         getDiffResult={() => $diffResult}
         onClickChange={handleEditorChangeClick}
         onScroll={handleEditorScroll}
-        getSlopMatchers={() => ($hasChanges ? [] : $slopMatchers)}
+        getSlopMatchers={() => $slopMatchers}
       />
     </div>
+
+    {#if referenceFiles.length > 0}
+      <aside class="reference-panel glass-surface">
+        <div class="reference-header">
+          <span>Reference</span>
+          <button class="reference-open" onclick={pickReferenceFile} title="Open reference (⌘⇧O)">
+            ⌘⇧O
+          </button>
+        </div>
+
+        <div class="reference-tabs">
+          {#each referenceFiles as ref, index}
+            <button
+              class="reference-tab"
+              class:active={index === activeReferenceIndex}
+              onclick={() => activeReferenceIndex = index}
+              title={ref.path}
+            >
+              {ref.name}
+            </button>
+          {/each}
+        </div>
+
+        <div class="reference-content">
+          <pre>{referenceFiles[activeReferenceIndex]?.content}</pre>
+        </div>
+      </aside>
+    {/if}
   </main>
 
-  <footer class="notes-panel" class:expanded={notesExpanded}>
+  <footer class="notes-panel glass-surface" class:expanded={notesExpanded}>
     <button class="notes-toggle" onclick={() => notesExpanded = !notesExpanded}>
       <span class="notes-icon">{notesExpanded ? '▾' : '▸'}</span>
       <span>General notes</span>
@@ -532,9 +714,83 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     justify-content: center;
   }
 
+  .reference-panel {
+    width: 320px;
+    border-left: var(--border-subtle);
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .reference-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    font-family: var(--font-ui);
+    font-size: var(--text-ui);
+    color: var(--ink-faded);
+    border-bottom: var(--border-subtle);
+  }
+
+  .reference-open {
+    background: none;
+    border: 1px solid var(--paper-edge);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: var(--text-ui-small);
+    color: var(--ink-ghost);
+    cursor: pointer;
+  }
+
+  .reference-open:hover {
+    color: var(--ink);
+    border-color: var(--ink-ghost);
+  }
+
+  .reference-tabs {
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-subtle);
+    overflow-x: auto;
+  }
+
+  .reference-tab {
+    background: var(--paper);
+    border: 1px solid var(--paper-edge);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: var(--text-ui-small);
+    color: var(--ink-faded);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .reference-tab.active {
+    color: var(--ink);
+    border-color: var(--accent-subtle);
+    background: var(--paper);
+  }
+
+  .reference-content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .reference-content pre {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
   /* Notes Panel */
   .notes-panel {
-    background: var(--paper-matte);
+    background: transparent;
     border-top: var(--border-subtle);
     transition: height var(--transition-normal);
   }

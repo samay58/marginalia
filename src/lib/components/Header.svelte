@@ -7,7 +7,7 @@
   } = $props();
 </script>
 
-<header class="header no-select" data-tauri-drag-region>
+<header class="header no-select glass-surface" data-tauri-drag-region>
   <div class="traffic-lights-space">
     <!-- Space for macOS traffic lights -->
   </div>
@@ -34,7 +34,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 var(--space-4);
-    background: var(--paper-matte);
+    background: transparent;
     border-bottom: var(--border-subtle);
     position: relative;
     z-index: 100;

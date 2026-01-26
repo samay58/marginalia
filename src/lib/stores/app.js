@@ -117,11 +117,10 @@ export const linesWithAnnotations = derived(
   }
 );
 
-/** Lines that violate WRITING.md bans */
+/** Lines that violate tone or WRITING.md bans */
 export const linesWithSlop = derived(
-  [originalPlainText, slopMatchers, hasChanges],
-  ([$text, $matchers, $hasChanges]) => {
-    if ($hasChanges) return new Set();
+  [editedPlainText, slopMatchers],
+  ([$text, $matchers]) => {
     if (!$text || !$matchers || $matchers.length === 0) return new Set();
     const lines = $text.split(/\r?\n/);
     const result = new Set();

@@ -21,9 +21,11 @@ A native macOS app for reviewing AI-generated drafts. Users make inline edits, a
 ```bash
 pnpm install          # Install dependencies
 pnpm tauri dev        # Development server with hot reload (first run compiles Rust, ~2min)
-pnpm tauri build      # Production build → target/release/bundle/macos/Marginalia.app
+pnpm tauri build      # Production app bundle → target/release/bundle/macos/Marginalia.app
+pnpm tauri:build:dmg  # DMG bundle (requires GUI)
 pnpm build            # Frontend only (Vite)
 pnpm check            # Svelte type checking
+./scripts/release.sh  # Build DMG + create GitHub release (requires gh auth)
 ```
 
 No test suite is configured.
@@ -35,6 +37,13 @@ No test suite is configured.
 ```
 
 This runs the hook locally, opens Marginalia, blocks until you exit, and verifies the bundle summary exists.
+
+Quick tone lint check:
+
+```bash
+./scripts/make-slop-fixture.sh
+./src-tauri/target/debug/marginalia open /tmp/marginalia-slop.md
+```
 
 ### Feedback Without Text Edits
 
@@ -90,6 +99,8 @@ User edits → diffResult → milkdown-diff-plugin → decorations
 - `milkdown-slop-plugin.js` - ProseMirror plugin for WRITING.md violation highlights
 - `prosemirror-text.js` - buildTextMap() maps plain text offsets to doc positions
 - `writing-rules.js` - Parses WRITING.md to create violation matchers
+- `tone-lint.js` - Curated tone lint rules (AI-ish phrases + suggestions)
+- `lint.js` - Collects lint findings for bundle summaries
 
 **Rust Backend** (`src-tauri/src/lib.rs`):
 - `read_file`, `write_file` - Filesystem access
@@ -113,7 +124,7 @@ Svelte stores in `app.js`:
 - `originalPlainText` / `editedPlainText` - Rendered text for accurate diffing
 - `diffResult` - Derived store, recomputes when plain text changes
 - `annotations` - Map<changeId, Annotation>
-- `slopMatchers` - Array of regex patterns from WRITING.md
+- `slopMatchers` - Array of regex patterns from WRITING.md + tone lint
 
 ### Diff Plugin Architecture
 

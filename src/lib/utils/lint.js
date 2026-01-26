@@ -1,3 +1,13 @@
+/**
+ * @typedef {{ label: string, pattern: string, flags?: string, category?: string | null, suggestion?: string | null }} LintMatcher
+ * @typedef {{ maxPerRule?: number, maxTotal?: number }} LintOptions
+ * @typedef {{ label: string, line: number, match: string, snippet: string, category?: string | null, suggestion?: string | null }} LintFinding
+ */
+
+/**
+ * @param {string} pattern
+ * @param {string} [flags]
+ */
 function buildRegex(pattern, flags) {
   if (!pattern) return null;
   const safeFlags = flags || 'g';
@@ -9,6 +19,12 @@ function buildRegex(pattern, flags) {
   }
 }
 
+/**
+ * @param {string} text
+ * @param {LintMatcher[]} matchers
+ * @param {LintOptions} [options]
+ * @returns {LintFinding[]}
+ */
 export function collectLintFindings(text, matchers, options = {}) {
   if (!text || !matchers || matchers.length === 0) return [];
 
@@ -32,8 +48,10 @@ export function collectLintFindings(text, matchers, options = {}) {
     if (!line) continue;
 
     for (const matcher of compiled) {
-      matcher.regex.lastIndex = 0;
-      const match = matcher.regex.exec(line);
+      const regex = matcher.regex;
+      if (!regex) continue;
+      regex.lastIndex = 0;
+      const match = regex.exec(line);
       if (!match) continue;
 
       const seen = perRuleCount.get(matcher.label) || 0;

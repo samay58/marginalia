@@ -66,7 +66,8 @@ function offsetToLocation(text, offset) {
  */
 export function computeDiff(original, edited) {
   // Compute the diff
-  const diffs = dmp.diff_main(original, edited);
+  /** @type {Array<[number, string]>} */
+  const diffs = /** @type {Array<[number, string]>} */ (dmp.diff_main(original, edited));
 
   // Cleanup for better semantics (combines adjacent changes)
   dmp.diff_cleanupSemantic(diffs);
@@ -129,6 +130,7 @@ export function computeDiff(original, edited) {
 export function groupChanges(changes) {
   /** @type {Change[][]} */
   const groups = [];
+  /** @type {Change[]} */
   let currentGroup = [];
 
   for (let i = 0; i < changes.length; i++) {

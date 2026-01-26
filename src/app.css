@@ -90,6 +90,13 @@
   --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.12);
 
   /* -------------------------------------------------------------------------
+     GLASS
+     ------------------------------------------------------------------------- */
+  --glass-bg: rgba(250, 249, 247, 0.72);
+  --glass-border: rgba(232, 230, 225, 0.7);
+  --glass-blur: 18px;
+
+  /* -------------------------------------------------------------------------
      TRANSITIONS
      ------------------------------------------------------------------------- */
   --transition-fast: 120ms ease-out;
@@ -125,6 +132,10 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  --glass-bg: rgba(28, 26, 24, 0.7);
+  --glass-border: rgba(61, 57, 53, 0.65);
+  --glass-blur: 18px;
 }
 
 /* =============================================================================
@@ -153,6 +164,14 @@ body {
   color: var(--ink);
   background-color: var(--paper);
   overflow: hidden;
+}
+
+.glass-surface {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-sm);
 }
 
 /* Prevent text selection in UI elements */

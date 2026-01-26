@@ -7,41 +7,90 @@ import { buildTextMap } from './prosemirror-text.js';
 const diffPluginKey = new PluginKey('marginalia-diff');
 
 /**
+ * @typedef {import('./diff.js').Change} Change
+ * @typedef {import('./diff.js').DiffResult} DiffResult
+ * @typedef {{ text: string, offsets: number[] }} TextMap
+ * @typedef {(changeId: string, text: string, x: number, y: number) => void} ChangeClickHandler
+ */
+
+/**
  * Create a deletion widget (struck-through text)
  * If deletion spans multiple lines, preserve whitespace without inserting block-level DOM
+ */
+/**
+ * @param {Change} change
+ * @param {ChangeClickHandler | null} onClick
  */
 function createDeletionWidget(change, onClick) {
   const hasNewlines = change.text.includes('\n');
 
-  const span = document.createElement('span');
-  span.className = hasNewlines ? 'struck struck-block' : 'struck';
-  span.textContent = change.text;
-  span.setAttribute('contenteditable', 'false');
-  span.dataset.changeId = change.id;
-  span.dataset.changeText = change.text;
-  span.dataset.changeType = 'deletion';
+  const wrapper = document.createElement('span');
+  wrapper.className = hasNewlines ? 'struck-wrapper struck-block' : 'struck-wrapper';
+  wrapper.setAttribute('contenteditable', 'false');
+  wrapper.dataset.changeId = change.id;
+  wrapper.dataset.changeText = change.text;
+  wrapper.dataset.changeType = 'deletion';
 
-  return span;
+  const match = change.text.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  const leading = match?.[1] ?? '';
+  const core = match?.[2] ?? change.text;
+  const trailing = match?.[3] ?? '';
+  const hasLeading = leading.length > 0;
+  const hasTrailing = trailing.length > 0;
+
+  if (leading) {
+    const lead = document.createElement('span');
+    lead.className = 'struck-space';
+    lead.textContent = leading;
+    wrapper.appendChild(lead);
+  }
+
+  const coreSpan = document.createElement('span');
+  let coreClass = 'struck struck-core';
+  if (!hasLeading) {
+    coreClass += ' struck-tight-left';
+  }
+  if (!hasTrailing) {
+    coreClass += ' struck-tight-right';
+  }
+  coreSpan.className = coreClass;
+  coreSpan.textContent = core;
+  wrapper.appendChild(coreSpan);
+
+  if (trailing) {
+    const tail = document.createElement('span');
+    tail.className = 'struck-space';
+    tail.textContent = trailing;
+    wrapper.appendChild(tail);
+  }
+
+  return wrapper;
 }
 
 /**
  * Create decorations from diff result
  * Verifies current doc text matches the diffed text to prevent misaligned widgets
  */
-function createDiffDecorations(doc, diffResult, onClickChange) {
+/**
+ * @param {import('@milkdown/prose/model').Node} doc
+ * @param {TextMap} textMap
+ * @param {DiffResult | null} diffResult
+ * @param {ChangeClickHandler | null} onClickChange
+ */
+function createDiffDecorations(doc, textMap, diffResult, onClickChange) {
   if (!diffResult || !diffResult.changes || diffResult.changes.length === 0) {
     return DecorationSet.empty;
   }
 
-  const textMap = buildTextMap(doc);
   const offsets = textMap.offsets;
+  const hasSnapshot = typeof diffResult._editedText === 'string';
+  const isFresh = !hasSnapshot || textMap.text === diffResult._editedText;
 
-  // Safety check: if current doc text doesn't match what was diffed,
-  // return empty decorations (stale diff, will recompute on next cycle)
-  if (diffResult._editedText && textMap.text !== diffResult._editedText) {
+  if (!isFresh) {
     return DecorationSet.empty;
   }
 
+  /** @param {number} offset */
   const offsetToPos = (offset) => {
     // Return null for any invalid offset - widget will be skipped
     if (!offsets || offsets.length === 0) return null;
@@ -78,7 +127,17 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
       // Use an exclusive end offset so we highlight the full insertion.
       // offsets[endOffset] maps to the position *after* the last inserted char.
       const endOffset = change.editedOffset + change.text.length;
-      const endPos = offsetToPos(endOffset);
+      let endPos = offsetToPos(endOffset);
+
+      if (endOffset > 0) {
+        const lastCharPos = offsetToPos(endOffset - 1);
+        if (lastCharPos !== null) {
+          const minEndPos = lastCharPos + 1;
+          if (endPos === null || endPos < minEndPos) {
+            endPos = minEndPos;
+          }
+        }
+      }
 
       if (endPos !== null && endPos > docPos) {
         decorations.push(
@@ -96,10 +155,15 @@ function createDiffDecorations(doc, diffResult, onClickChange) {
   return DecorationSet.create(doc, decorations);
 }
 
+/** @type {ChangeClickHandler | null} */
 let currentClickHandler = null;
 
 /**
  * Create the diff decoration plugin
+ */
+/**
+ * @param {() => DiffResult | null} getDiffResult
+ * @param {ChangeClickHandler} onClickChange
  */
 export function createDiffPlugin(getDiffResult, onClickChange) {
   currentClickHandler = onClickChange;
@@ -111,13 +175,21 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
       state: {
         init(_, state) {
           const diffResult = getDiffResult();
-          return createDiffDecorations(state.doc, diffResult, currentClickHandler);
+          const textMap = buildTextMap(state.doc);
+          return createDiffDecorations(state.doc, textMap, diffResult, currentClickHandler);
         },
 
         apply(tr, oldDecorations, oldState, newState) {
           if (tr.docChanged || tr.getMeta(diffPluginKey) === 'update') {
             const diffResult = getDiffResult();
-            return createDiffDecorations(newState.doc, diffResult, currentClickHandler);
+            if (!diffResult || !diffResult.changes) {
+              return DecorationSet.empty;
+            }
+            if (diffResult.changes.length === 0) {
+              return DecorationSet.empty;
+            }
+            const textMap = buildTextMap(newState.doc);
+            return createDiffDecorations(newState.doc, textMap, diffResult, currentClickHandler);
           }
           return oldDecorations.map(tr.mapping, tr.doc);
         },
@@ -131,11 +203,15 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
         handleClick(view, pos, event) {
           const target = event.target;
           if (target instanceof HTMLElement && currentClickHandler) {
-            const changeId = target.dataset.changeId;
-            const changeText = target.dataset.changeText;
+            const changeEl = target.closest('[data-change-id]');
+            if (!(changeEl instanceof HTMLElement)) {
+              return false;
+            }
+            const changeId = changeEl.dataset?.changeId;
+            const changeText = changeEl.dataset?.changeText;
 
             if (changeId && changeText) {
-              const rect = target.getBoundingClientRect();
+              const rect = changeEl.getBoundingClientRect();
               // Position popover to the right of the element
               currentClickHandler(changeId, changeText, rect.right + 8, rect.top);
               return true;
@@ -150,6 +226,9 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
 
 /**
  * Trigger a diff update
+ */
+/**
+ * @param {import('@milkdown/core').Editor} editor
  */
 export function triggerDiffUpdate(editor) {
   try {

@@ -24,6 +24,9 @@ const STOP_WORDS = new Set([
   'with',
 ]);
 
+/**
+ * @param {string} text
+ */
 function normalize(text) {
   return text
     .toLowerCase()
@@ -32,11 +35,17 @@ function normalize(text) {
     .trim();
 }
 
+/**
+ * @param {string} text
+ */
 function tokenize(text) {
   const normalized = normalize(text);
   return normalized ? normalized.split(' ').filter(Boolean) : [];
 }
 
+/**
+ * @param {string} title
+ */
 function buildTitleKeywords(title) {
   const raw = title.trim();
   const keywords = new Set();
@@ -56,6 +65,9 @@ function buildTitleKeywords(title) {
   return Array.from(keywords).filter(Boolean);
 }
 
+/**
+ * @param {string} line
+ */
 function parseBannedList(line) {
   return line
     .split(',')
@@ -63,6 +75,9 @@ function parseBannedList(line) {
     .filter(Boolean);
 }
 
+/**
+ * @param {string} text
+ */
 export function parseWritingRules(text) {
   const rules = [];
   const lines = text.split(/\r?\n/);
@@ -113,8 +128,12 @@ export function parseWritingRules(text) {
   return rules;
 }
 
+/**
+ * @param {string} text
+ */
 export function createWritingRuleMatcher(text) {
   const rules = parseWritingRules(text);
+  /** @type {Array<{ keyword: string, label: string, isPhrase: boolean }>} */
   const index = [];
 
   for (const rule of rules) {
@@ -133,6 +152,9 @@ export function createWritingRuleMatcher(text) {
 
   return {
     rules,
+    /**
+     * @param {string} rationale
+     */
     match(rationale) {
       const normalized = normalize(rationale);
       if (!normalized) return null;
@@ -149,10 +171,16 @@ export function createWritingRuleMatcher(text) {
   };
 }
 
+/**
+ * @param {string} text
+ */
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * @param {string} text
+ */
 export function createViolationMatchers(text) {
   const rules = parseWritingRules(text);
   const matchers = [];
@@ -166,6 +194,7 @@ export function createViolationMatchers(text) {
         label: rule.label,
         pattern: `\\b${escapeRegExp(word)}\\b`,
         flags: 'g',
+        category: 'writing',
       });
     }
   }
@@ -176,6 +205,7 @@ export function createViolationMatchers(text) {
       label: 'No Em-Dashes',
       pattern: '—|--',
       flags: 'g',
+      category: 'writing',
     });
   }
 

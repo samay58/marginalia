@@ -6,6 +6,14 @@ import { buildTextMap } from './prosemirror-text.js';
 
 const slopPluginKey = new PluginKey('marginalia-slop');
 
+/**
+ * @typedef {{ label?: string, pattern: string, flags?: string, category?: string | null }} SlopMatcher
+ */
+
+/**
+ * @param {import('@milkdown/prose/model').Node} doc
+ * @param {SlopMatcher[]} matchers
+ */
 function createSlopDecorations(doc, matchers) {
   if (!matchers || matchers.length === 0) return DecorationSet.empty;
 
@@ -14,6 +22,7 @@ function createSlopDecorations(doc, matchers) {
   const offsets = textMap.offsets;
   if (!text) return DecorationSet.empty;
 
+  /** @param {number} offset */
   const offsetToPos = (offset) => {
     if (!offsets || offsets.length === 0) return doc.content.size;
     if (offset < 0) return null;
@@ -45,6 +54,9 @@ function createSlopDecorations(doc, matchers) {
   return DecorationSet.create(doc, decorations);
 }
 
+/**
+ * @param {() => SlopMatcher[]} getMatchers
+ */
 export function createSlopPlugin(getMatchers) {
   return $prose(() => {
     return new Plugin({
@@ -71,6 +83,9 @@ export function createSlopPlugin(getMatchers) {
   });
 }
 
+/**
+ * @param {import('@milkdown/core').Editor} editor
+ */
 export function triggerSlopUpdate(editor) {
   try {
     const view = editor.ctx.get(editorViewCtx);
