@@ -138,12 +138,10 @@ bundle_path=$(jq -r '.bundle_path // ""' "$status_file" 2>/dev/null || echo "")
 
 case "$status" in
     "reviewed")
-        if [[ "$changes_made" == "true" && -n "$bundle_path" ]]; then
-            # User made changes - point Claude to the bundle
+        if [[ -n "$bundle_path" ]]; then
             summary_path="${bundle_path}/summary_for_agent.md"
-            output_hook_response "User reviewed and made changes. Read ${summary_path} for revision guidance, then revise the draft accordingly."
+            output_hook_response "User reviewed and provided feedback. Read ${summary_path} for revision guidance, then revise the draft accordingly."
         else
-            # User reviewed but made no changes - approved as-is
             output_hook_response "User reviewed and approved the draft without changes. No revisions needed."
         fi
         ;;

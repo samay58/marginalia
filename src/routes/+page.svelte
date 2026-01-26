@@ -218,10 +218,10 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
     const changesMade = $hasChanges;
     const hasNotes = typeof $generalNotes === 'string' && $generalNotes.trim().length > 0;
     const hasAnnotations = $annotations instanceof Map && $annotations.size > 0;
-    const shouldCreateBundle = changesMade || hasNotes || hasAnnotations;
+    const feedbackProvided = changesMade || hasNotes || hasAnnotations;
 
     // No feedback case - write status and close
-    if (!shouldCreateBundle) {
+    if (!feedbackProvided) {
       console.log('No changes or notes to save');
       try {
         if (cliOutPath) {
@@ -277,7 +277,7 @@ Additionally, we recommend a $25M investment at the proposed valuation. This wou
       if (cliOutPath) {
         await invoke('write_file', {
           path: cliOutPath,
-          content: buildStatus('reviewed', changesMade, savedPath)
+          content: buildStatus('reviewed', feedbackProvided, savedPath)
         });
       }
 
