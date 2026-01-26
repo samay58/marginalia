@@ -1,6 +1,6 @@
 [package]
 name = "marginalia"
-version = "0.1.0"
+version = "0.1.1"
 description = "Feedback interface for AI-assisted writing"
 authors = ["Samay Dhawan"]
 edition = "2021"
@@ -24,4 +24,3 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
-
