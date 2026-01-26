@@ -9,6 +9,10 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 src-tauri/icons-backup/
-.beads/
+# Beads - track issues.jsonl for sync
+.beads/*
+!.beads/issues.jsonl
+!.beads/config.yaml
+!.beads/.gitignore
 analysis/
 CODEX-HANDOFF.md
