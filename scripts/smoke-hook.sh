@@ -18,7 +18,8 @@ What it does:
   - If a bundle is produced, verifies summary_for_agent.md exists
 
 Notes:
-  - To force a bundle: make at least one edit OR add General Notes OR add an annotation, then press Esc.
+  - To force a bundle: make at least one text edit OR add General Notes (Cmd+G) OR add an annotation, then press Esc.
+  - Annotations are attached to a diff change. If you make no edits, use General Notes.
 EOF
 }
 

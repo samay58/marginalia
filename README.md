@@ -48,6 +48,25 @@ marginalia open ./draft.md \
   --principles ~/phoenix/WRITING.md
 ```
 
+### Leaving Feedback Without Editing Text
+
+Sometimes you don’t want to touch the draft — you just want to tell the model what to change.
+
+1. Open **General notes** (click the bar at the bottom, or press `⌘ G`)
+2. Type your feedback
+3. Press `Esc` (or click **Done**) to save
+
+That still creates a bundle and the hook will point Claude at `summary_for_agent.md`.
+
+**Important**: `⌘ Q` cancels the session (no bundle).
+
+### Annotations (Rationales)
+
+Annotations are attached to a specific edit (a diff change). If there are no changes, there’s nothing to anchor an annotation to.
+
+- Make a small edit on a line
+- Press `⌘ /` (or click the highlighted change / gutter marker) to add a rationale
+
 ### Claude Code Hook Integration
 
 Add to `~/.claude/settings.json`:
@@ -74,6 +93,14 @@ Files matching these patterns will automatically open in Marginalia:
 - `*-draft.md` in deal folders
 - `draft-*.md` in career exploration
 - Any file with `<!-- REVIEW -->` marker
+
+## Testing
+
+Run the interactive smoke test:
+
+```bash
+./scripts/smoke-hook.sh
+```
 
 ## Keyboard Shortcuts
 

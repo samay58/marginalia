@@ -28,6 +28,20 @@ pnpm check            # Svelte type checking
 
 No test suite is configured.
 
+## Testing (Fast)
+
+```bash
+./scripts/smoke-hook.sh
+```
+
+This runs the hook locally, opens Marginalia, blocks until you exit, and verifies the bundle summary exists.
+
+### Feedback Without Text Edits
+
+- Use **General notes** (`⌘ G`) for feedback that isn’t tied to a specific edit.
+- Annotations (`⌘ /`) are attached to a diff change; you need at least one edit on a line to add one.
+- Use `Esc` / `⌘ Enter` / **Done** to save. `⌘ Q` cancels.
+
 ## Keyboard Shortcuts
 
 | Key | Action |
