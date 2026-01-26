@@ -21,3 +21,8 @@ Release assets:
 - DMG from `src-tauri/target/release/bundle/dmg`
 - `scripts/install.sh`
 - `scripts/marginalia`
+
+## Latest Verification / Release
+
+- 2026-01-26: Ran `./scripts/smoke-hook.sh` twice. Hook executed and returned well-formed PostToolUse JSON. (No bundle was produced because the draft was closed without edits/notes.)
+- 2026-01-26: Published GitHub Release `v0.1.2` with `Marginalia_0.1.2_aarch64.dmg` + `install.sh` + `marginalia`.
