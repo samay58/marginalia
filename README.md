@@ -20,7 +20,34 @@ Your edits teach the AI. The AI applies the revisions. Marginalia is the bridge.
 4. Press Esc. Bundle outputs. Claude reads it, revises correctly.
 5. Stable patterns promote to WRITING.md via `/reflect`
 
-## Quick Start
+## Install (macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash
+```
+
+Optional during install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash -s -- --with-claude --global
+```
+
+Hook requirement: `jq` (install via `brew install jq`).
+
+Optional Claude Code setup (per-project or global):
+
+```bash
+marginalia init
+marginalia init --global
+```
+
+Smoke test (opens Marginalia and blocks until you exit):
+
+```bash
+marginalia smoke-test
+```
+
+## Developer Quick Start
 
 ```bash
 # Install dependencies
@@ -69,6 +96,13 @@ Annotations are attached to a specific edit (a diff change). If there are no cha
 
 ### Claude Code Hook Integration
 
+Quick setup (recommended):
+
+```bash
+marginalia init          # writes ./.claude/settings.json
+marginalia init --global # writes ~/.claude/settings.json
+```
+
 Add to `~/.claude/settings.json`:
 
 ```json
@@ -80,7 +114,8 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/marginalia/hooks/post-write.sh"
+            "command": "bash ~/.marginalia/hooks/post-write.sh",
+            "timeout": 1800000
           }
         ]
       }
@@ -88,6 +123,8 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
+
+If you cloned the repo, point the command to your local path (e.g., `bash ~/marginalia/hooks/post-write.sh`).
 
 Files matching these patterns will automatically open in Marginalia:
 - `*-draft.md` in deal folders
@@ -100,6 +137,19 @@ Run the interactive smoke test:
 
 ```bash
 ./scripts/smoke-hook.sh
+```
+
+Or use the CLI wrapper (installed via the one-command installer):
+
+```bash
+marginalia smoke-test
+```
+
+Tone lint check (optional):
+
+```bash
+./scripts/make-slop-fixture.sh
+./src-tauri/target/debug/marginalia open /tmp/marginalia-slop.md
 ```
 
 ## Keyboard Shortcuts
@@ -116,7 +166,7 @@ Run the interactive smoke test:
 
 ## Anti-Slop Highlights
 
-If a WRITING.md principles file is available, banned words and em-dashes are highlighted in the editor and flagged in the gutter before you start editing.
+If a WRITING.md principles file is available, banned words and em-dashes are highlighted in the editor and flagged in the gutter. Marginalia also ships a tone lint pack (e.g., “I hope this finds you well”, “cutting-edge”) that highlights AI-ish phrasing and stays active while you edit.
 
 ## Bundle Output
 
@@ -135,7 +185,7 @@ When you close Marginalia, it generates a bundle at:
 - `--out` writes the saved bundle path to a file (for scripting)
 - `--principles` records a WRITING.md path in `changes.json`
 
-When a principles file is available, annotations auto-match rules and surface them in `summary_for_agent.md`.
+When a principles file is available, annotations auto-match rules and surface them in `summary_for_agent.md`. Tone + slop flags are summarized under “Tone & Slop Flags” with suggestions.
 
 ## Technical Stack
 

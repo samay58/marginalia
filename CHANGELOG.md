@@ -6,8 +6,13 @@ All notable changes to Marginalia.
 
 ### Added
 - CLI flags: `--bundle-dir`, `--out`, `--principles`
+- One-command installer script + CLI wrapper (`marginalia init`, `marginalia smoke-test`)
 - Auto-match annotations to WRITING.md rules when a principles file is available
 - Anti-slop highlights for banned words and em-dashes from WRITING.md
+- Undo/redo via Milkdown history + keymap
+- Tone lint pack for AI-ish phrasing + summary section in bundles
+- Hook smoke test script (`./scripts/smoke-hook.sh`)
+- Tone-lint fixture script (`./scripts/make-slop-fixture.sh`)
 
 ### Fixed
 - Render diff decorations in the editor (Milkdown diff plugin)
@@ -15,7 +20,11 @@ All notable changes to Marginalia.
 - Anchor popovers to clicked element bounds (no fixed offsets)
 - Close the window after bundle save (Tauri close + exit)
 - Prevent diff widgets from blocking editor clicks
-- Limit anti-slop highlights to pre-edit state for stability
+- Keep tone/slop highlights active during edits
+- Ensure notes-only sessions still generate bundles
+- Prevent stale diff snapshots from janking decorations
+- Preserve deletion spacing and insertion highlight end chars
+- Fix debug binary blank window with dev-server check dialog
 
 ## [0.1.0] - 2026-01-19
 

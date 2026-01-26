@@ -3,7 +3,7 @@
 # Triggers Marginalia for draft files and BLOCKS until user completes review.
 # Returns structured feedback to Claude for revision guidance.
 #
-# Install by adding to ~/.claude/settings.json:
+# Install via `marginalia init` (recommended), or add to ~/.claude/settings.json:
 # {
 #   "hooks": {
 #     "PostToolUse": [
@@ -12,7 +12,7 @@
 #         "hooks": [
 #           {
 #             "type": "command",
-#             "command": "bash ~/marginalia/hooks/post-write.sh",
+#             "command": "bash ~/.marginalia/hooks/post-write.sh",
 #             "timeout": 1800000
 #           }
 #         ]

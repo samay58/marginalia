@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="Marginalia"
+APP_PATH="${MARGINALIA_APP_PATH:-/Applications/${APP_NAME}.app}"
+HOOK_DIR="${MARGINALIA_HOOK_DIR:-${HOME}/.marginalia/hooks}"
+HOOK_PATH="${HOOK_DIR}/post-write.sh"
+HOOK_MATCHER="${MARGINALIA_HOOK_MATCHER:-Write|Edit}"
+REPO="${MARGINALIA_REPO:-samaydhawan/marginalia}"
+REF="${MARGINALIA_REF:-main}"
+
+usage() {
+  cat <<'EOF'
+Marginalia CLI
+
+Usage:
+  marginalia open <file> [--bundle-dir DIR] [--out PATH] [--principles PATH]
+  marginalia init [--project|--global|--settings PATH]
+  marginalia smoke-test
+
+Notes:
+  - "init" installs the Claude Code hook and writes a PostToolUse entry.
+  - "smoke-test" runs the hook end-to-end (opens Marginalia and blocks).
+  - Set MARGINALIA_APP_PATH to override the app location.
+EOF
+}
+
+log() {
+  printf '%s\n' "$*" >&2
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    log "Missing dependency: $1"
+    exit 1
+  fi
+}
+
+ensure_hook_script() {
+  if [[ -x "${HOOK_PATH}" ]]; then
+    return
+  fi
+
+  require_cmd curl
+  mkdir -p "${HOOK_DIR}"
+
+  local source="${MARGINALIA_HOOK_SOURCE:-https://raw.githubusercontent.com/${REPO}/${REF}/hooks/post-write.sh}"
+  log "Installing hook to ${HOOK_PATH}"
+  curl -fsSL "${source}" -o "${HOOK_PATH}"
+  chmod +x "${HOOK_PATH}"
+}
+
+configure_claude_settings() {
+  local settings_path="$1"
+
+  require_cmd python3
+  python3 - "${settings_path}" "${HOOK_PATH}" "${HOOK_MATCHER}" <<'PY'
+import json
+import os
+import sys
+
+settings_path, hook_path, matcher = sys.argv[1:]
+
+data = {}
+if os.path.exists(settings_path):
+    with open(settings_path, "r") as handle:
+        try:
+            data = json.load(handle)
+        except json.JSONDecodeError as exc:
+            sys.stderr.write(f"Invalid JSON in {settings_path}: {exc}\n")
+            sys.exit(1)
+
+hooks = data.get("hooks") or {}
+post_tool_use = hooks.get("PostToolUse") or []
+if not isinstance(post_tool_use, list):
+    post_tool_use = [post_tool_use]
+
+command = f"bash {hook_path}"
+entry = {
+    "matcher": matcher,
+    "hooks": [
+        {
+            "type": "command",
+            "command": command,
+            "timeout": 1800000,
+        }
+    ],
+}
+
+def is_same(existing):
+    if not isinstance(existing, dict):
+        return False
+    if existing.get("matcher") != matcher:
+        return False
+    hooks_list = existing.get("hooks")
+    if not isinstance(hooks_list, list):
+        return False
+    for hook in hooks_list:
+        if (
+            isinstance(hook, dict)
+            and hook.get("type") == "command"
+            and hook.get("command") == command
+        ):
+            return True
+    return False
+
+if not any(is_same(existing) for existing in post_tool_use):
+    post_tool_use.append(entry)
+
+hooks["PostToolUse"] = post_tool_use
+data["hooks"] = hooks
+
+parent_dir = os.path.dirname(settings_path)
+if parent_dir:
+    os.makedirs(parent_dir, exist_ok=True)
+with open(settings_path, "w") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+
+print(f"Wrote {settings_path}")
+PY
+}
+
+run_app() {
+  local app_binary="${APP_PATH}/Contents/MacOS/${APP_NAME}"
+  if [[ -x "${app_binary}" ]]; then
+    exec "${app_binary}" "$@"
+  fi
+  if command -v open >/dev/null 2>&1; then
+    exec open -a "${APP_NAME}" --args "$@"
+  fi
+  log "Marginalia app not found. Install it to ${APP_PATH} or set MARGINALIA_APP_PATH."
+  exit 1
+}
+
+smoke_test() {
+  require_cmd jq
+  ensure_hook_script
+
+  local tmp_file="/tmp/marginalia-smoke-$$-draft.md"
+  trap 'rm -f "${tmp_file}"' EXIT
+
+  cat >"${tmp_file}" <<'EOF'
+<!-- REVIEW -->
+# Marginalia Smoke Test
+
+Change one word and/or add a General Note, then press Esc.
+EOF
+
+  local payload
+  payload="$(
+    jq -n --arg file_path "${tmp_file}" --rawfile content "${tmp_file}" \
+      '{tool_input:{file_path:$file_path,content:$content}}'
+  )"
+
+  log "Launching Marginalia via hook for: ${tmp_file}"
+  local hook_output
+  hook_output="$(printf '%s' "${payload}" | bash "${HOOK_PATH}")"
+
+  printf '%s\n' "${hook_output}"
+
+  local event_name
+  event_name="$(printf '%s' "${hook_output}" | jq -r '.hookSpecificOutput.hookEventName // empty')"
+  if [[ "${event_name}" != "PostToolUse" ]]; then
+    log "Unexpected hook output (missing hookSpecificOutput.hookEventName=PostToolUse)"
+    exit 1
+  fi
+
+  local message
+  message="$(printf '%s' "${hook_output}" | jq -r '.hookSpecificOutput.additionalContext // empty')"
+  if [[ -z "${message}" ]]; then
+    log "Unexpected hook output (missing hookSpecificOutput.additionalContext)"
+    exit 1
+  fi
+
+  local summary_path
+  summary_path="$(printf '%s' "${message}" | sed -nE 's/.*Read ([^ ]+summary_for_agent\.md).*/\1/p')"
+  if [[ -n "${summary_path}" ]]; then
+    if [[ ! -f "${summary_path}" ]]; then
+      log "Bundle summary not found: ${summary_path}"
+      exit 1
+    fi
+    log "OK: bundle summary exists at ${summary_path}"
+  else
+    log "OK: no bundle produced (likely no edits/notes/annotations)"
+  fi
+}
+
+command="${1:-}"
+case "${command}" in
+  ""|-h|--help)
+    usage
+    ;;
+  init)
+    shift
+    ensure_hook_script
+
+    settings_path=""
+    scope="project"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --global)
+          scope="global"
+          shift
+          ;;
+        --project)
+          scope="project"
+          shift
+          ;;
+        --settings)
+          if [[ -z "${2:-}" ]]; then
+            log "Missing path for --settings"
+            exit 1
+          fi
+          settings_path="${2}"
+          shift 2
+          ;;
+        -h|--help)
+          usage
+          exit 0
+          ;;
+        *)
+          log "Unknown init option: $1"
+          usage
+          exit 1
+          ;;
+      esac
+    done
+
+    if [[ -z "${settings_path}" ]]; then
+      if [[ "${scope}" == "global" ]]; then
+        settings_path="${HOME}/.claude/settings.json"
+      else
+        settings_path="$(pwd)/.claude/settings.json"
+      fi
+    fi
+
+    configure_claude_settings "${settings_path}"
+    ;;
+  smoke-test)
+    shift
+    smoke_test
+    ;;
+  *)
+    run_app "$@"
+    ;;
+esac

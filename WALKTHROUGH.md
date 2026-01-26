@@ -986,6 +986,38 @@ Claude can read `summary_for_agent.md` for a quick overview, or parse the JSON f
 
 Marginalia integrates with Claude Code via a PostToolUse hook.
 
+### Install + Hook Setup
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash
+```
+
+Optional during install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samaydhawan/marginalia/main/scripts/install.sh | bash -s -- --with-claude --global
+```
+
+Hook requirement: `jq` (install via `brew install jq`).
+
+Per-project hooks (recommended):
+
+```bash
+marginalia init
+```
+
+Or global hooks:
+
+```bash
+marginalia init --global
+```
+
+Smoke test (opens Marginalia and blocks until you exit):
+
+```bash
+marginalia smoke-test
+```
+
 ### How Hooks Work
 
 ```
@@ -1014,7 +1046,8 @@ Marginalia integrates with Claude Code via a PostToolUse hook.
            |
            v
    If should_review:
-     marginalia open "$file_path" &
+     marginalia open "$file_path" --out "$status_file"
+     (blocking until review completes)
 ```
 
 ### The Hook Script
@@ -1034,11 +1067,12 @@ should_review=false
 [[ "$content" == *"<!-- REVIEW -->"* ]] && should_review=true
 
 if [[ "$should_review" == true ]]; then
-    marginalia open "$file_path" &
+    status_file="/tmp/marginalia-$$.json"
+    marginalia open "$file_path" --out "$status_file"
 fi
 ```
 
-The `&` at the end is important - it runs Marginalia in the background so Claude Code doesn't wait.
+This hook blocks so Claude waits for your review, then reads the output bundle path.
 
 ---
 
