@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Product Improvement Handoff
+
+**If you're here to investigate issues and plan improvements**, read:
+- `CODEX-HANDOFF.md` - Full context, failure modes, and deliverables
+- Session packet at `~/phoenix/01-active/current-personal-projects/marginalia/session-packet-2026-01-25/`
+
+The project has 10 open issues and adoption dropped off after 4 days of real use.
+
+---
+
 ## What is Marginalia?
 
 A native macOS app for reviewing AI-generated drafts. Users make inline edits, add short rationales ("no hedging", "quantify the miss"), and Marginalia outputs a structured bundle that Claude can read to revise correctly.
