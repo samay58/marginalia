@@ -8,6 +8,7 @@ DMG_URL="${MARGINALIA_DMG_URL:-}"
 APP_DIR="${MARGINALIA_APP_DIR:-/Applications}"
 BIN_DIR="${MARGINALIA_BIN_DIR:-}"
 HOOK_MATCHER="${MARGINALIA_HOOK_MATCHER:-Write|Edit}"
+HOOK_MODE="${MARGINALIA_HOOK_MODE:-sync}"
 
 WITH_CLAUDE=false
 CLAUDE_SCOPE="project"
@@ -23,6 +24,8 @@ Options:
   --with-claude          Write Claude Code hook config after install
   --global               Use ~/.claude/settings.json (default: per-project)
   --project              Use ./.claude/settings.json
+  --async                Configure Claude hook in async mode (non-blocking)
+  --sync                 Configure Claude hook in sync mode (blocking; default)
   --repo <owner/name>    GitHub repo (default: samay58/marginalia)
   --ref <tag>            Release tag or ref (default: latest release)
   --dmg-url <url>        Direct DMG download URL
@@ -59,6 +62,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --project)
       CLAUDE_SCOPE="project"
+      shift
+      ;;
+    --async)
+      HOOK_MODE="async"
+      shift
+      ;;
+    --sync)
+      HOOK_MODE="sync"
       shift
       ;;
     --repo)
@@ -259,13 +270,16 @@ install_hook() {
 configure_claude_settings() {
   local settings_path="$1"
   local hook_path="$2"
+  local hook_mode="$3"
 
-  python3 - "${settings_path}" "${hook_path}" "${HOOK_MATCHER}" <<'PY'
+  python3 - "${settings_path}" "${hook_path}" "${HOOK_MATCHER}" "${hook_mode}" <<'PY'
 import json
 import os
 import sys
 
-settings_path, hook_path, matcher = sys.argv[1:]
+settings_path, hook_path, matcher, hook_mode = sys.argv[1:]
+if hook_mode not in {"sync", "async"}:
+    hook_mode = "sync"
 
 data = {}
 if os.path.exists(settings_path):
@@ -281,37 +295,42 @@ post_tool_use = hooks.get("PostToolUse") or []
 if not isinstance(post_tool_use, list):
     post_tool_use = [post_tool_use]
 
-command = f"bash {hook_path}"
+if hook_mode == "async":
+    command = f"MARGINALIA_REVIEW_MODE=async bash {hook_path}"
+else:
+    command = f"bash {hook_path}"
+
+hook_entry = {
+    "type": "command",
+    "command": command,
+    "timeout": 1800000,
+}
+if hook_mode == "async":
+    hook_entry["async"] = True
+
 entry = {
     "matcher": matcher,
-    "hooks": [
-        {
-            "type": "command",
-            "command": command,
-            "timeout": 1800000,
-        }
-    ],
+    "hooks": [hook_entry],
 }
 
-def is_same(existing):
+def references_marginalia_hook(existing):
     if not isinstance(existing, dict):
-        return False
-    if existing.get("matcher") != matcher:
         return False
     hooks_list = existing.get("hooks")
     if not isinstance(hooks_list, list):
         return False
     for hook in hooks_list:
-        if (
-            isinstance(hook, dict)
-            and hook.get("type") == "command"
-            and hook.get("command") == command
-        ):
+        if not isinstance(hook, dict):
+            continue
+        if hook.get("type") != "command":
+            continue
+        command_text = hook.get("command", "")
+        if f"bash {hook_path}" in command_text:
             return True
     return False
 
-if not any(is_same(existing) for existing in post_tool_use):
-    post_tool_use.append(entry)
+post_tool_use = [existing for existing in post_tool_use if not references_marginalia_hook(existing)]
+post_tool_use.append(entry)
 
 hooks["PostToolUse"] = post_tool_use
 data["hooks"] = hooks
@@ -338,7 +357,7 @@ if [[ "${WITH_CLAUDE}" == "true" ]]; then
   else
     claude_settings_path="$(pwd)/.claude/settings.json"
   fi
-  configure_claude_settings "${claude_settings_path}" "${HOME}/.marginalia/hooks/post-write.sh"
+  configure_claude_settings "${claude_settings_path}" "${HOME}/.marginalia/hooks/post-write.sh" "${HOOK_MODE}"
 fi
 
 log "Install complete."

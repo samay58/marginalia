@@ -62,18 +62,46 @@ export const currentLine = writable(1);
 
 // Derived stores
 
+/** @type {import('../utils/diff.js').DiffResult | null} */
+let previousDiffSnapshot = null;
+/** @type {string} */
+let previousOriginalForSnapshot = '';
+
 /** Computed diff between original and edited PLAIN TEXT (what user sees) */
 export const diffResult = derived(
   [originalPlainText, editedPlainText],
   ([$originalText, $editedText]) => {
     // Wait until both stores have content (avoid race condition during initialization)
     if (!$originalText || !$editedText) {
+      previousDiffSnapshot = null;
+      previousOriginalForSnapshot = '';
       return null;
     }
-    if ($originalText === $editedText) {
-      return { changes: [], deletions: 0, insertions: 0 };
+
+    if ($originalText !== previousOriginalForSnapshot) {
+      previousDiffSnapshot = null;
+      previousOriginalForSnapshot = $originalText;
     }
-    return computeDiff($originalText, $editedText);
+
+    if ($originalText === $editedText) {
+      const empty = {
+        changes: [],
+        deletions: 0,
+        insertions: 0,
+        _originalText: $originalText,
+        _editedText: $editedText,
+      };
+      previousDiffSnapshot = empty;
+      return empty;
+    }
+    const next = computeDiff(
+      $originalText,
+      $editedText,
+      previousDiffSnapshot?.changes || [],
+      previousDiffSnapshot?._editedText || ''
+    );
+    previousDiffSnapshot = next;
+    return next;
   }
 );
 
@@ -151,6 +179,8 @@ export const linesWithSlop = derived(
  */
 export function initializeWithContent(path, content) {
   const name = path.split('/').pop() || 'Untitled';
+  previousDiffSnapshot = null;
+  previousOriginalForSnapshot = '';
   filename.set(name);
   filePath.set(path);
   originalContent.set(content);
@@ -161,6 +191,52 @@ export function initializeWithContent(path, content) {
   annotations.set(new Map());
   generalNotes.set('');
   startTime.set(new Date());
+}
+
+/**
+ * Restore state from a previously persisted session snapshot.
+ * @param {object} snapshot
+ * @param {string} snapshot.filePath
+ * @param {string} [snapshot.filename]
+ * @param {string} [snapshot.originalContent]
+ * @param {string} [snapshot.editedContent]
+ * @param {string} [snapshot.originalPlainText]
+ * @param {string} [snapshot.editedPlainText]
+ * @param {string} [snapshot.generalNotes]
+ * @param {Array<{ changeId: string, annotation: Annotation }>} [snapshot.annotations]
+ * @param {string} [snapshot.startedAt]
+ */
+export function restoreFromSnapshot(snapshot) {
+  const restoredFilePath = snapshot.filePath || '';
+  const restoredFilename =
+    snapshot.filename || restoredFilePath.split('/').pop() || 'Untitled';
+  const restoredOriginal = snapshot.originalContent || '';
+  const restoredEdited = snapshot.editedContent ?? restoredOriginal;
+  const restoredOriginalPlain = snapshot.originalPlainText || '';
+  const restoredEditedPlain =
+    snapshot.editedPlainText || restoredOriginalPlain || '';
+
+  /** @type {Map<string, Annotation>} */
+  const restoredAnnotations = new Map();
+  if (Array.isArray(snapshot.annotations)) {
+    for (const entry of snapshot.annotations) {
+      if (!entry || typeof entry.changeId !== 'string' || !entry.annotation) continue;
+      restoredAnnotations.set(entry.changeId, entry.annotation);
+    }
+  }
+
+  previousDiffSnapshot = null;
+  previousOriginalForSnapshot = restoredOriginalPlain;
+
+  filename.set(restoredFilename);
+  filePath.set(restoredFilePath);
+  originalContent.set(restoredOriginal);
+  editedContent.set(restoredEdited);
+  originalPlainText.set(restoredOriginalPlain);
+  editedPlainText.set(restoredEditedPlain);
+  annotations.set(restoredAnnotations);
+  generalNotes.set(snapshot.generalNotes || '');
+  startTime.set(snapshot.startedAt ? new Date(snapshot.startedAt) : new Date());
 }
 
 /**
@@ -233,6 +309,8 @@ export function updateGeneralNotes(notes) {
  * Reset the store to initial state
  */
 export function reset() {
+  previousDiffSnapshot = null;
+  previousOriginalForSnapshot = '';
   filename.set('Untitled');
   filePath.set('');
   originalContent.set('');

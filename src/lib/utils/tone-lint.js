@@ -68,8 +68,19 @@ const TONE_RULES = [
   },
 ];
 
+/**
+ * @param {string} label
+ */
+function toRuleId(label) {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 export function createToneMatchers() {
   return TONE_RULES.map((rule) => ({
+    id: `tone.${toRuleId(rule.label)}`,
     label: rule.label,
     pattern: rule.pattern,
     flags: rule.flags || 'gi',

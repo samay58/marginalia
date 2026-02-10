@@ -93,7 +93,7 @@
     <div class="popover-header">
       <span class="popover-title">Add rationale</span>
       {#if currentRationale}
-        <button class="remove-btn" onclick={handleRemove} title="Remove annotation">
+        <button class="remove-btn control-motion control-focus" onclick={handleRemove} title="Remove annotation">
           ×
         </button>
       {/if}
@@ -108,7 +108,7 @@
     <input
       bind:this={inputEl}
       type="text"
-      class="rationale-input"
+      class="rationale-input control-focus"
       placeholder="e.g., No hedging, Quantify the miss"
       bind:value={rationale}
       onkeydown={handleKeydown}
@@ -117,7 +117,7 @@
     <div class="category-row">
       {#each categories as cat}
         <button
-          class="category-chip"
+          class="category-chip control-motion control-focus"
           class:selected={selectedCategory === cat.value}
           onclick={() => selectedCategory = selectedCategory === cat.value ? '' : cat.value}
         >
@@ -127,8 +127,8 @@
     </div>
 
     <div class="popover-footer">
-      <button class="cancel-btn" onclick={close}>Cancel</button>
-      <button class="save-btn" onclick={handleSubmit} disabled={!rationale.trim()}>
+      <button class="cancel-btn control-motion control-focus control-raise" onclick={close}>Cancel</button>
+      <button class="save-btn control-motion control-focus control-raise" onclick={handleSubmit} disabled={!rationale.trim()}>
         Save
       </button>
     </div>

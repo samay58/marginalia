@@ -1,7 +1,7 @@
 /**
- * @typedef {{ label: string, pattern: string, flags?: string, category?: string | null, suggestion?: string | null }} LintMatcher
+ * @typedef {{ id?: string, label: string, pattern: string, flags?: string, category?: string | null, suggestion?: string | null }} LintMatcher
  * @typedef {{ maxPerRule?: number, maxTotal?: number }} LintOptions
- * @typedef {{ label: string, line: number, match: string, snippet: string, category?: string | null, suggestion?: string | null }} LintFinding
+ * @typedef {{ rule_id: string, label: string, line: number, match: string, snippet: string, pattern: string, category?: string | null, suggestion?: string | null }} LintFinding
  */
 
 /**
@@ -17,6 +17,19 @@ function buildRegex(pattern, flags) {
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * @param {LintMatcher} matcher
+ */
+function resolveRuleId(matcher) {
+  if (matcher.id) return matcher.id;
+  const label = (matcher.label || 'unnamed')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const category = (matcher.category || 'lint').toLowerCase();
+  return `${category}.${label || 'rule'}`;
 }
 
 /**
@@ -58,10 +71,12 @@ export function collectLintFindings(text, matchers, options = {}) {
       if (seen >= maxPerRule) continue;
 
       findings.push({
+        rule_id: resolveRuleId(matcher),
         label: matcher.label,
         line: i + 1,
         match: match[0],
         snippet: line.trim().slice(0, 160),
+        pattern: matcher.pattern,
         category: matcher.category || null,
         suggestion: matcher.suggestion || null,
       });

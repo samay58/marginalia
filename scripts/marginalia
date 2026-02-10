@@ -6,6 +6,7 @@ APP_PATH="${MARGINALIA_APP_PATH:-/Applications/${APP_NAME}.app}"
 HOOK_DIR="${MARGINALIA_HOOK_DIR:-${HOME}/.marginalia/hooks}"
 HOOK_PATH="${HOOK_DIR}/post-write.sh"
 HOOK_MATCHER="${MARGINALIA_HOOK_MATCHER:-Write|Edit}"
+HOOK_MODE="${MARGINALIA_HOOK_MODE:-sync}"
 REPO="${MARGINALIA_REPO:-samay58/marginalia}"
 REF="${MARGINALIA_REF:-main}"
 
@@ -15,11 +16,13 @@ Marginalia CLI
 
 Usage:
   marginalia open <file> [--bundle-dir DIR] [--out PATH] [--principles PATH]
-  marginalia init [--project|--global|--settings PATH]
+  marginalia init [--project|--global|--settings PATH] [--sync|--async]
   marginalia smoke-test
 
 Notes:
   - "init" installs the Claude Code hook and writes a PostToolUse entry.
+  - Use "--async" to configure non-blocking hook execution in Claude.
+    Marginalia reviews will be queued and delivered when done.
   - "smoke-test" runs the hook end-to-end (opens Marginalia and blocks).
   - Set MARGINALIA_APP_PATH to override the app location.
 EOF
@@ -52,14 +55,17 @@ ensure_hook_script() {
 
 configure_claude_settings() {
   local settings_path="$1"
+  local hook_mode="$2"
 
   require_cmd python3
-  python3 - "${settings_path}" "${HOOK_PATH}" "${HOOK_MATCHER}" <<'PY'
+  python3 - "${settings_path}" "${HOOK_PATH}" "${HOOK_MATCHER}" "${hook_mode}" <<'PY'
 import json
 import os
 import sys
 
-settings_path, hook_path, matcher = sys.argv[1:]
+settings_path, hook_path, matcher, hook_mode = sys.argv[1:]
+if hook_mode not in {"sync", "async"}:
+    hook_mode = "sync"
 
 data = {}
 if os.path.exists(settings_path):
@@ -75,37 +81,42 @@ post_tool_use = hooks.get("PostToolUse") or []
 if not isinstance(post_tool_use, list):
     post_tool_use = [post_tool_use]
 
-command = f"bash {hook_path}"
+if hook_mode == "async":
+    command = f"MARGINALIA_REVIEW_MODE=async bash {hook_path}"
+else:
+    command = f"bash {hook_path}"
+
+hook_entry = {
+    "type": "command",
+    "command": command,
+    "timeout": 1800000,
+}
+if hook_mode == "async":
+    hook_entry["async"] = True
+
 entry = {
     "matcher": matcher,
-    "hooks": [
-        {
-            "type": "command",
-            "command": command,
-            "timeout": 1800000,
-        }
-    ],
+    "hooks": [hook_entry],
 }
 
-def is_same(existing):
+def references_marginalia_hook(existing):
     if not isinstance(existing, dict):
-        return False
-    if existing.get("matcher") != matcher:
         return False
     hooks_list = existing.get("hooks")
     if not isinstance(hooks_list, list):
         return False
     for hook in hooks_list:
-        if (
-            isinstance(hook, dict)
-            and hook.get("type") == "command"
-            and hook.get("command") == command
-        ):
+        if not isinstance(hook, dict):
+            continue
+        if hook.get("type") != "command":
+            continue
+        command_text = hook.get("command", "")
+        if f"bash {hook_path}" in command_text:
             return True
     return False
 
-if not any(is_same(existing) for existing in post_tool_use):
-    post_tool_use.append(entry)
+post_tool_use = [existing for existing in post_tool_use if not references_marginalia_hook(existing)]
+post_tool_use.append(entry)
 
 hooks["PostToolUse"] = post_tool_use
 data["hooks"] = hooks
@@ -123,11 +134,15 @@ PY
 
 run_app() {
   local app_binary="${APP_PATH}/Contents/MacOS/${APP_NAME}"
+  if [[ -d "${APP_PATH}" ]] && command -v open >/dev/null 2>&1; then
+    # Launch via LaunchServices so Dock/app icon and lifecycle behave like a normal macOS app.
+    exec open -W "${APP_PATH}" --args "$@"
+  fi
   if [[ -x "${app_binary}" ]]; then
     exec "${app_binary}" "$@"
   fi
   if command -v open >/dev/null 2>&1; then
-    exec open -a "${APP_NAME}" --args "$@"
+    exec open -W -a "${APP_NAME}" --args "$@"
   fi
   log "Marginalia app not found. Install it to ${APP_PATH} or set MARGINALIA_APP_PATH."
   exit 1
@@ -197,6 +212,7 @@ case "${command}" in
 
     settings_path=""
     scope="project"
+    hook_mode="${HOOK_MODE}"
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --global)
@@ -214,6 +230,14 @@ case "${command}" in
           fi
           settings_path="${2}"
           shift 2
+          ;;
+        --async)
+          hook_mode="async"
+          shift
+          ;;
+        --sync)
+          hook_mode="sync"
+          shift
           ;;
         -h|--help)
           usage
@@ -235,7 +259,7 @@ case "${command}" in
       fi
     fi
 
-    configure_claude_settings "${settings_path}"
+    configure_claude_settings "${settings_path}" "${hook_mode}"
     ;;
   smoke-test)
     shift

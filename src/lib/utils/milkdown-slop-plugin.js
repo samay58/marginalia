@@ -7,7 +7,7 @@ import { buildTextMap } from './prosemirror-text.js';
 const slopPluginKey = new PluginKey('marginalia-slop');
 
 /**
- * @typedef {{ label?: string, pattern: string, flags?: string, category?: string | null }} SlopMatcher
+ * @typedef {{ id?: string, label?: string, pattern: string, flags?: string, category?: string | null, suggestion?: string | null }} SlopMatcher
  */
 
 /**
@@ -46,6 +46,7 @@ function createSlopDecorations(doc, matchers) {
         Decoration.inline(startPos, endPos, {
           class: 'slop-violation',
           'data-violation': matcher.label,
+          'data-violation-id': matcher.id || matcher.label || 'lint-rule',
         })
       );
     }

@@ -1,13 +1,15 @@
 <script>
-  /** @type {{ filename?: string, hasChanges?: boolean, onDone?: () => void }} */
+  /** @type {{ filename?: string, hasChanges?: boolean, densityMode?: 'review' | 'manuscript', onSetDensity?: (mode: 'review' | 'manuscript') => void, onDone?: () => void }} */
   let {
     filename = 'Untitled',
     hasChanges = false,
+    densityMode = 'manuscript',
+    onSetDensity = () => {},
     onDone = () => {}
   } = $props();
 </script>
 
-<header class="header no-select glass-surface" data-tauri-drag-region>
+<header class="header no-select glass-surface glass-surface-focal" data-tauri-drag-region>
   <div class="traffic-lights-space">
     <!-- Space for macOS traffic lights -->
   </div>
@@ -20,8 +22,24 @@
   </div>
 
   <div class="header-actions">
+    <div class="density-switch" role="group" aria-label="Density mode">
+      <button
+        class="density-option control-motion control-focus"
+        class:active={densityMode === 'review'}
+        onclick={() => onSetDensity('review')}
+      >
+        Review
+      </button>
+      <button
+        class="density-option control-motion control-focus"
+        class:active={densityMode === 'manuscript'}
+        onclick={() => onSetDensity('manuscript')}
+      >
+        Manuscript
+      </button>
+    </div>
     <span class="hint">Esc</span>
-    <button class="done-button" onclick={onDone}>
+    <button class="done-button control-motion control-focus control-raise" onclick={onDone}>
       Done
     </button>
   </div>
@@ -73,6 +91,37 @@
     gap: var(--space-3);
   }
 
+  .density-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--paper-matte) 70%, transparent);
+    border: 1px solid var(--paper-edge);
+  }
+
+  .density-option {
+    border: none;
+    border-radius: calc(var(--radius-md) - 2px);
+    background: transparent;
+    color: var(--ink-faded);
+    font-family: var(--font-ui);
+    font-size: var(--text-ui-small);
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+
+  .density-option:hover {
+    color: var(--ink);
+  }
+
+  .density-option.active {
+    background: var(--paper-bright);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+
   .hint {
     font-family: var(--font-mono);
     font-size: var(--text-ui-small);
@@ -100,7 +149,10 @@
     background: var(--accent-hover);
   }
 
-  .done-button:active {
-    transform: scale(0.98);
+  @media (max-width: 860px) {
+    .density-switch {
+      display: none;
+    }
   }
+
 </style>

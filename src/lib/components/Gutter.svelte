@@ -31,7 +31,7 @@
   }
 </script>
 
-<div class="gutter no-select glass-surface" bind:this={gutterEl} onscroll={handleScroll}>
+<div class="gutter no-select glass-surface glass-surface-static" bind:this={gutterEl} onscroll={handleScroll}>
   {#each Array(lineCount) as _, i}
     {@const lineNum = i + 1}
     {@const hasChange = $linesWithChanges.has(lineNum)}

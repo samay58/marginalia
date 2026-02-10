@@ -3,13 +3,13 @@
   import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from '@milkdown/core';
   import { commonmark } from '@milkdown/preset-commonmark';
   import { listener, listenerCtx } from '@milkdown/plugin-listener';
-  import { replaceAll, getMarkdown } from '@milkdown/utils';
+  import * as milkdownUtils from '@milkdown/utils';
   import { createDiffPlugin, triggerDiffUpdate } from '../utils/milkdown-diff-plugin.js';
   import { historyKeymapPlugin, historyPlugin } from '../utils/milkdown-history-plugin.js';
   import { createSlopPlugin, triggerSlopUpdate } from '../utils/milkdown-slop-plugin.js';
   import { buildTextMap } from '../utils/prosemirror-text.js';
 
-  /** @type {{ content?: string, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[] }} */
+  /** @type {{ content?: string, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
   let {
     content = '',
     onChange = () => {},
@@ -19,8 +19,18 @@
     getDiffResult = () => null,
     onClickChange = () => {},
     onScroll = () => {},
-    getSlopMatchers = () => []
+    getSlopMatchers = () => [],
+    onRuntimeError = () => {},
   } = $props();
+
+  /**
+   * @param {string} code
+   * @param {unknown} error
+   */
+  function reportRuntimeError(code, error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    onRuntimeError(code, detail);
+  }
 
   /** @type {HTMLDivElement} */
   let editorContainer;
@@ -47,6 +57,7 @@
       }
     } catch (e) {
       console.error('Failed to extract plain text:', e);
+      reportRuntimeError('editor_plain_text_extract_failed', e);
     }
     return '';
   }
@@ -80,7 +91,11 @@
               }
               diffUpdateTimeout = setTimeout(() => {
                 if (editor) {
-                  triggerDiffUpdate(editor);
+                  try {
+                    triggerDiffUpdate(editor);
+                  } catch (e) {
+                    reportRuntimeError('editor_diff_refresh_failed', e);
+                  }
                 }
               }, DIFF_DEBOUNCE_MS);
             }
@@ -113,6 +128,7 @@
       editorContainer.addEventListener('keyup', updateLineNumber);
     } catch (e) {
       console.error('Failed to initialize Milkdown:', e);
+      reportRuntimeError('editor_init_failed', e);
     }
   }
 
@@ -133,6 +149,7 @@
       }
     } catch (e) {
       // Ignore errors during initialization
+      reportRuntimeError('editor_line_tracking_failed', e);
     }
   }
 
@@ -193,7 +210,7 @@
     if (isReady && editor && currentContent !== lastKnownContent) {
       try {
         isInternalUpdate = true;
-        editor.action(replaceAll(currentContent));
+        editor.action(milkdownUtils.replaceAll(currentContent));
         lastKnownContent = currentContent;
         // Use setTimeout to ensure flag is cleared after async Milkdown updates
         setTimeout(() => {
@@ -205,6 +222,7 @@
         }, 0);
       } catch (e) {
         console.error('Failed to update editor content:', e);
+        reportRuntimeError('editor_external_sync_failed', e);
         isInternalUpdate = false;
       }
     }
@@ -215,8 +233,9 @@
   export function getContent() {
     if (!editor || !isReady) return '';
     try {
-      return editor.action(getMarkdown());
+      return editor.action(milkdownUtils.getMarkdown());
     } catch (e) {
+      reportRuntimeError('editor_markdown_read_failed', e);
       return '';
     }
   }
@@ -228,7 +247,7 @@
       const view = editor.ctx.get(editorViewCtx);
       view?.focus();
     } catch (e) {
-      // Ignore
+      reportRuntimeError('editor_focus_failed', e);
     }
   }
 
@@ -239,6 +258,7 @@
       triggerDiffUpdate(editor);
     } catch (e) {
       console.error('Failed to refresh diff:', e);
+      reportRuntimeError('editor_diff_refresh_failed', e);
     }
   }
 
@@ -248,6 +268,7 @@
       triggerSlopUpdate(editor);
     } catch (e) {
       console.error('Failed to refresh slop:', e);
+      reportRuntimeError('editor_slop_refresh_failed', e);
     }
   }
 
@@ -415,49 +436,6 @@
   }
 
   /* Diff decorations - these will be applied via plugin */
-  .editor-wrapper :global(.struck-wrapper) {
-    cursor: pointer;
-    white-space: pre-wrap;
-    transition: opacity var(--transition-fast);
-  }
-
-  .editor-wrapper :global(.struck-space) {
-    white-space: pre-wrap;
-  }
-
-  .editor-wrapper :global(.struck) {
-    background-color: var(--struck-bg);
-    color: var(--struck-text);
-    text-decoration: line-through;
-    text-decoration-color: var(--struck-line);
-    padding: 1px 2px;
-    border-radius: 2px;
-    cursor: pointer;
-    white-space: pre-wrap;
-    transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
-  }
-
-  .editor-wrapper :global(.struck-tight-left) {
-    padding-left: 0;
-  }
-
-  .editor-wrapper :global(.struck-tight-right) {
-    padding-right: 0;
-  }
-
-  .editor-wrapper :global(.struck-block) {
-    display: inline-block;
-    margin: 0;
-    padding: var(--space-2) var(--space-3);
-    border-left: 2px solid var(--struck-line);
-    max-width: 100%;
-  }
-
-  .editor-wrapper :global(.struck-block .struck-core) {
-    text-decoration: line-through;
-    text-decoration-color: var(--struck-line);
-  }
-
   .editor-wrapper :global(.added) {
     background-color: var(--added-bg);
     color: var(--added-text);
@@ -468,7 +446,6 @@
     transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
   }
 
-  .editor-wrapper :global(.struck:hover),
   .editor-wrapper :global(.added:hover) {
     filter: brightness(0.95);
   }

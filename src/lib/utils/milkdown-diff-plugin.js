@@ -14,70 +14,16 @@ const diffPluginKey = new PluginKey('marginalia-diff');
  */
 
 /**
- * Create a deletion widget (struck-through text)
- * If deletion spans multiple lines, preserve whitespace without inserting block-level DOM
- */
-/**
- * @param {Change} change
- * @param {ChangeClickHandler | null} onClick
- */
-function createDeletionWidget(change, onClick) {
-  const hasNewlines = change.text.includes('\n');
-
-  const wrapper = document.createElement('span');
-  wrapper.className = hasNewlines ? 'struck-wrapper struck-block' : 'struck-wrapper';
-  wrapper.setAttribute('contenteditable', 'false');
-  wrapper.dataset.changeId = change.id;
-  wrapper.dataset.changeText = change.text;
-  wrapper.dataset.changeType = 'deletion';
-
-  const match = change.text.match(/^(\s*)([\s\S]*?)(\s*)$/);
-  const leading = match?.[1] ?? '';
-  const core = match?.[2] ?? change.text;
-  const trailing = match?.[3] ?? '';
-  const hasLeading = leading.length > 0;
-  const hasTrailing = trailing.length > 0;
-
-  if (leading) {
-    const lead = document.createElement('span');
-    lead.className = 'struck-space';
-    lead.textContent = leading;
-    wrapper.appendChild(lead);
-  }
-
-  const coreSpan = document.createElement('span');
-  let coreClass = 'struck struck-core';
-  if (!hasLeading) {
-    coreClass += ' struck-tight-left';
-  }
-  if (!hasTrailing) {
-    coreClass += ' struck-tight-right';
-  }
-  coreSpan.className = coreClass;
-  coreSpan.textContent = core;
-  wrapper.appendChild(coreSpan);
-
-  if (trailing) {
-    const tail = document.createElement('span');
-    tail.className = 'struck-space';
-    tail.textContent = trailing;
-    wrapper.appendChild(tail);
-  }
-
-  return wrapper;
-}
-
-/**
  * Create decorations from diff result
- * Verifies current doc text matches the diffed text to prevent misaligned widgets
+ * Verifies current doc text matches the diffed text to prevent misaligned ranges.
+ * Deletions are intentionally not rendered inline to avoid cursor/selection traps.
  */
 /**
  * @param {import('@milkdown/prose/model').Node} doc
  * @param {TextMap} textMap
  * @param {DiffResult | null} diffResult
- * @param {ChangeClickHandler | null} onClickChange
  */
-function createDiffDecorations(doc, textMap, diffResult, onClickChange) {
+function createDiffDecorations(doc, textMap, diffResult) {
   if (!diffResult || !diffResult.changes || diffResult.changes.length === 0) {
     return DecorationSet.empty;
   }
@@ -113,16 +59,7 @@ function createDiffDecorations(doc, textMap, diffResult, onClickChange) {
       continue;
     }
 
-    if (change.type === 'deletion') {
-      // Widget decoration - shows struck text at the position
-      decorations.push(
-        Decoration.widget(docPos, () => createDeletionWidget(change, onClickChange), {
-          side: -1,
-          key: change.id,
-          ignoreSelection: true,
-        })
-      );
-    } else if (change.type === 'insertion') {
+    if (change.type === 'insertion') {
       // Inline decoration - highlights the inserted text
       // Use an exclusive end offset so we highlight the full insertion.
       // offsets[endOffset] maps to the position *after* the last inserted char.
@@ -176,7 +113,7 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
         init(_, state) {
           const diffResult = getDiffResult();
           const textMap = buildTextMap(state.doc);
-          return createDiffDecorations(state.doc, textMap, diffResult, currentClickHandler);
+          return createDiffDecorations(state.doc, textMap, diffResult);
         },
 
         apply(tr, oldDecorations, oldState, newState) {
@@ -189,7 +126,7 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
               return DecorationSet.empty;
             }
             const textMap = buildTextMap(newState.doc);
-            return createDiffDecorations(newState.doc, textMap, diffResult, currentClickHandler);
+            return createDiffDecorations(newState.doc, textMap, diffResult);
           }
           return oldDecorations.map(tr.mapping, tr.doc);
         },

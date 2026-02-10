@@ -181,6 +181,13 @@ function escapeRegExp(text) {
 /**
  * @param {string} text
  */
+function toRuleKey(text) {
+  return normalize(text).replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+/**
+ * @param {string} text
+ */
 export function createViolationMatchers(text) {
   const rules = parseWritingRules(text);
   const matchers = [];
@@ -191,6 +198,7 @@ export function createViolationMatchers(text) {
       const word = parts.length > 1 ? parts.slice(1).join(':').trim() : rule.label;
       if (!word) continue;
       matchers.push({
+        id: `writing.${toRuleKey(word)}`,
         label: rule.label,
         pattern: `\\b${escapeRegExp(word)}\\b`,
         flags: 'g',
@@ -202,6 +210,7 @@ export function createViolationMatchers(text) {
   const hasEmDashRule = rules.some((rule) => rule.label.toLowerCase().includes('em-dash'));
   if (hasEmDashRule) {
     matchers.push({
+      id: 'writing.no_em_dash',
       label: 'No Em-Dashes',
       pattern: '—|--',
       flags: 'g',

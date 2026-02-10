@@ -93,15 +93,31 @@
      GLASS
      ------------------------------------------------------------------------- */
   --glass-bg: rgba(250, 249, 247, 0.72);
+  --glass-bg-static: rgba(250, 249, 247, 0.9);
   --glass-border: rgba(232, 230, 225, 0.7);
-  --glass-blur: 18px;
+  --glass-blur-focal: 16px;
+  --glass-blur-ambient: 8px;
 
   /* -------------------------------------------------------------------------
      TRANSITIONS
      ------------------------------------------------------------------------- */
-  --transition-fast: 120ms ease-out;
-  --transition-normal: 200ms ease-out;
-  --transition-slow: 300ms ease-out;
+  --motion-ease-standard: cubic-bezier(0.22, 0, 0.18, 1);
+  --motion-ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 300ms;
+  --transition-fast: var(--motion-fast) var(--motion-ease-standard);
+  --transition-normal: var(--motion-normal) var(--motion-ease-standard);
+  --transition-slow: var(--motion-slow) var(--motion-ease-emphasis);
+
+  /* -------------------------------------------------------------------------
+     INTERACTION TOKENS
+     ------------------------------------------------------------------------- */
+  --focus-ring-color: color-mix(in srgb, var(--accent) 56%, transparent);
+  --focus-ring-base: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
+  --focus-ring: var(--focus-ring-base), 0 0 0 3px var(--focus-ring-color);
+  --motion-press-shift: 1px;
+  --motion-hover-lift: -1px;
 }
 
 /* =============================================================================
@@ -134,8 +150,10 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
 
   --glass-bg: rgba(28, 26, 24, 0.7);
+  --glass-bg-static: rgba(28, 26, 24, 0.88);
   --glass-border: rgba(61, 57, 53, 0.65);
-  --glass-blur: 18px;
+  --glass-blur-focal: 14px;
+  --glass-blur-ambient: 7px;
 }
 
 /* =============================================================================
@@ -169,15 +187,74 @@ body {
 .glass-surface {
   background: var(--glass-bg);
   border-color: var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--shadow-sm);
+}
+
+.glass-surface-focal {
+  backdrop-filter: blur(var(--glass-blur-focal));
+  -webkit-backdrop-filter: blur(var(--glass-blur-focal));
+}
+
+.glass-surface-ambient {
+  backdrop-filter: blur(var(--glass-blur-ambient));
+  -webkit-backdrop-filter: blur(var(--glass-blur-ambient));
+}
+
+.glass-surface-static {
+  background: var(--glass-bg-static);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Prevent text selection in UI elements */
 .no-select {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Shared interaction language */
+.control-motion {
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.control-motion:disabled {
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.control-raise:hover:not(:disabled) {
+  transform: translateY(var(--motion-hover-lift));
+}
+
+.control-motion:active:not(:disabled) {
+  transform: translateY(var(--motion-press-shift));
+}
+
+.control-focus:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-motion,
+  .control-motion:disabled {
+    transition: none;
+  }
+
+  .control-raise:hover:not(:disabled),
+  .control-motion:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 /* =============================================================================
