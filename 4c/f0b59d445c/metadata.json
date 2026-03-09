@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "4cf0b59d445c",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "CHANGELOG.md",
+    "POLISH-SPEC.md",
+    "README.md",
+    "WALKTHROUGH.md",
+    "src-tauri/tauri.conf.json",
+    "src/app.css",
+    "src/app.html",
+    "src/lib/site/CopyBlock.svelte",
+    "src/lib/site/reveal.js",
+    "src/lib/styles/site.css",
+    "src/routes/(marketing)/+layout.svelte",
+    "src/routes/(marketing)/+page.svelte",
+    "src/routes/+layout.svelte",
+    "src/routes/review/+page.svelte"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4c/f0b59d445c/0/metadata.json",
+      "transcript": "/4c/f0b59d445c/0/full.jsonl",
+      "content_hash": "/4c/f0b59d445c/0/content_hash.txt",
+      "prompt": "/4c/f0b59d445c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 473,
+    "cache_creation_tokens": 233184,
+    "cache_read_tokens": 5094711,
+    "output_tokens": 33076,
+    "api_call_count": 67
+  }
+}
