@@ -9,16 +9,25 @@
     "POLISH-SPEC.md",
     "README.md",
     "WALKTHROUGH.md",
+    "scripts/check-diff-id-retention.mjs",
     "src-tauri/tauri.conf.json",
     "src/app.css",
     "src/app.html",
+    "src/lib/components/AnnotationPopover.svelte",
+    "src/lib/components/ChangeRail.svelte",
+    "src/lib/components/Editor.svelte",
+    "src/lib/components/Header.svelte",
     "src/lib/site/CopyBlock.svelte",
     "src/lib/site/reveal.js",
+    "src/lib/stores/app.js",
     "src/lib/styles/site.css",
+    "src/lib/utils/diff.js",
+    "src/lib/utils/milkdown-diff-plugin.js",
     "src/routes/(marketing)/+layout.svelte",
     "src/routes/(marketing)/+page.svelte",
     "src/routes/+layout.svelte",
-    "src/routes/review/+page.svelte"
+    "src/routes/review/+page.svelte",
+    "vite.config.js"
   ],
   "sessions": [
     {
@@ -26,13 +35,19 @@
       "transcript": "/4c/f0b59d445c/0/full.jsonl",
       "content_hash": "/4c/f0b59d445c/0/content_hash.txt",
       "prompt": "/4c/f0b59d445c/0/prompt.txt"
+    },
+    {
+      "metadata": "/4c/f0b59d445c/1/metadata.json",
+      "transcript": "/4c/f0b59d445c/1/full.jsonl",
+      "content_hash": "/4c/f0b59d445c/1/content_hash.txt",
+      "prompt": "/4c/f0b59d445c/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 473,
-    "cache_creation_tokens": 233184,
-    "cache_read_tokens": 5094711,
-    "output_tokens": 33076,
-    "api_call_count": 67
+    "input_tokens": 503,
+    "cache_creation_tokens": 363800,
+    "cache_read_tokens": 7731819,
+    "output_tokens": 41171,
+    "api_call_count": 92
   }
 }

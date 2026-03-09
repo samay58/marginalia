@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "4cf0b59d445c",
+  "session_id": "2607b438-1942-43c8-9fd6-62ad845c0108",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T07:29:29.212619Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "CHANGELOG.md",
+    "POLISH-SPEC.md",
+    "README.md",
+    "WALKTHROUGH.md",
+    "scripts/check-diff-id-retention.mjs",
+    "src-tauri/tauri.conf.json",
+    "src/app.css",
+    "src/app.html",
+    "src/lib/components/AnnotationPopover.svelte",
+    "src/lib/components/ChangeRail.svelte",
+    "src/lib/components/Editor.svelte",
+    "src/lib/components/Header.svelte",
+    "src/lib/stores/app.js",
+    "src/lib/utils/diff.js",
+    "src/lib/utils/milkdown-diff-plugin.js",
+    "src/routes/+layout.svelte",
+    "src/routes/review/+page.svelte",
+    "vite.config.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6",
+  "turn_id": "2bdcef5dedbb",
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 130616,
+    "cache_read_tokens": 2637108,
+    "output_tokens": 8095,
+    "api_call_count": 25
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T07:29:28.827161Z",
+    "agent_lines": 1547,
+    "human_added": 2263,
+    "human_modified": 44,
+    "human_removed": 0,
+    "total_committed": 3854,
+    "agent_percentage": 40.140114167099114
+  }
+}
