@@ -1,0 +1,132 @@
+Implement the following plan:
+
+# Plan: Final Marginalia Designs — Elevated Pair
+
+## Context
+
+Six artboards exist exploring Marginalia's visual identity. The user wants a final, definitive pair (light + dark) that synthesizes the best elements, eliminates AI slop, and reaches a Phamous/Rauno level of craft: typography as the primary design element, restraint in decoration, information on surfaces (not in cards), every mark earning its place.
+
+## Critique of all 6 designs
+
+### Best elements to carry forward
+- **B (The Review, 27-0)**: Best editorial personality. Asymmetric layout with metadata in the left margin. Circled annotation numbers in the gutter. EB Garamond reads beautifully. Status bar is just centered text, no background bar. The most genuinely typographic solution.
+- **E (The Proof Sheet, 6Z-0)**: Most disciplined color use. Single red against monochrome. Charter is workmanlike and authoritative. Structural rules (2px black) give architecture without decoration. Margin note with just a thin red vertical rule is elegant.
+- **C (Writer's Proof, 28-0)**: Most minimal status bar. Margin note as plain italic text (no card). Warm cream background without being precious.
+
+### Worst elements to eliminate (AI slop patterns)
+- **D (The Study, 5P-0)**: Rounded-corner card backgrounds on edited paragraphs and margin notes. Reads as "dark mode component library," not "desk at midnight." The warm palette is right; the containers kill it.
+- **Original (1-0)**: Colored label headers ("EDIT 1", "3 SLOP PATTERNS") on annotation cards with background fills. Feels like a SaaS review dashboard, not a manuscript. Multiple competing colors (red, green, yellow, teal).
+- **A (The Galley, 26-0)**: The teal/green addition color is too saturated and digital. Otherwise fine but has no strong point of view beyond the font choice.
+
+### Structural AI slop to purge across ALL designs
+- Background fills on annotation areas (cards, pills, rounded rectangles)
+- Colored label headers on annotations
+- Multiple accent colors competing for attention
+- Additions rendered in a distinct "highlight" color (approved text should just become body text)
+- Container backgrounds around edited paragraphs
+
+## Final Design F: "The Redline" — Light
+
+The definitive light mode. Synthesizes B's editorial asymmetry, E's single-color discipline, and EB Garamond's beauty. The governing principle: **a manuscript page with one red pencil and nothing else.**
+
+**Palette (6 values):**
+- Background: `#FAFAF7` — warm off-white, like good paper. Not yellow, not clinical.
+- Text: `#1C1B18` — warm near-black. Not pure black.
+- Redline: `#C0503E` — a desaturated warm red, like a real red pencil mark. The ONLY color.
+- Addition text: `#1C1B18` — same as body, medium weight. Approved text becomes body text.
+- Chrome: `#A09E96` — warm mid-gray for metadata, shortcuts.
+- Divider: `#DDDDD8` — barely-there warm rule.
+
+**Typography:**
+- Body: EB Garamond, 400, 18px, line-height 30px
+- Title: EB Garamond, 400, 38px, line-height 44px — NOT bold. Large and assured. Authority from scale, not weight.
+- Left margin metadata: DM Sans, 300, 11px, letter-spacing 0.05em
+- Annotation text: EB Garamond, 400 italic, 14px, line-height 21px
+- Annotation number: EB Garamond, 400, 12px (circled, in gutter)
+- Status/shortcuts: DM Sans, 300, 11px
+
+**Layout (1040x780):**
+- Title bar: Minimal. Traffic lights left, filename center, NO background bar (transparent, just text).
+- Left margin (180px): "Investment Memo" in italic, "DRAFT 1 · CLAUDE" in small caps DM Sans beneath. This metadata lives in the margin, not under the title.
+- Manuscript column (520px): Title at top. Single 1px warm-gray rule beneath title. Body text below with generous spacing.
+- Right margin (340px): Annotation as just italic text, no card. Small circled number connects to the gutter mark.
+- Gutter: Circled annotation number (from B) positioned next to the relevant edit.
+- Status: Centered at bottom, no bar background. Just whisper-quiet "esc close · ⌘N note" text.
+- Edited text: Deletions in `#C0503E` with line-through. Additions in body-text color at slightly heavier weight (500). No backgrounds, no highlights.
+- Clean paragraphs: Just body text. Nothing extra.
+
+**What makes it definitive:** Typography does all the work. No fills, no cards, no containers. One thin rule under the title. One circled number in the gutter. One italic note in the margin. One red for all marks. The rest is white space and beautiful serif text.
+
+## Final Design G: "The Margin" — Dark
+
+The definitive dark mode. Fixes D's container problem by putting text directly on the dark surface. Keeps Crimson Pro's elegance and the warm walnut palette, but strips every decorative container.
+
+**Palette (6 values):**
+- Background: `#1D1A16` — deep warm walnut, darker than D for more drama.
+- Text: `#DAD3C6` — warm cream. Slightly lower contrast than pure white for comfort.
+- Redline: `#CF7B63` — warm terra cotta. Luminous against the dark, like a pencil catching lamplight.
+- Addition text: `#DAD3C6` — same as body, medium weight (500).
+- Chrome: `#5C5650` — dark warm gray.
+- Divider: `#2A2621` — barely visible warm rule.
+
+**Typography:**
+- Body: Crimson Pro, 400, 18px, line-height 30px
+- Title: Crimson Pro, 300 (Light), 38px, line-height 44px — dramatic: light weight at large scale against dark background.
+- Left margin metadata: DM Sans, 200, 11px, letter-spacing 0.05em
+- Annotation: Crimson Pro, 400 italic, 14px, line-height 21px
+- Annotation number: Crimson Pro, 400, 12px
+- Status: DM Sans, 200, 11px
+
+**Layout (1040x780):** Identical spatial structure to F. Same zones, same proportions. The designs are siblings.
+- Title bar: Traffic lights (muted warm circles), filename, no background.
+- Left margin metadata in same position.
+- Manuscript: Title with light weight (inversely dramatic to E's heavy black).
+- Single thin rule (1px, `#2A2621`) under title.
+- Edited text: Deletions in `#CF7B63` with line-through. Additions in body-text color at weight 500.
+- Right margin: Italic annotation with thin 1.5px vertical accent line in `#CF7B63`. No card, no glow background.
+- Gutter: Same circled annotation number pattern.
+- Status: Centered at bottom, no bar.
+- NO card backgrounds. NO rounded rectangles. NO glow backgrounds. Text lives on the surface.
+
+## Content (both artboards)
+
+Same memo passage, same edits, same margin note as A-E explorations:
+- Title: "Inference Infrastructure"
+- Para 1: "The market for inference infrastructure is consolidating faster than anyone expected." + edit: ~~In our assessment, we believe that~~ → We think + "the window for new entrants closes within eighteen months."
+- Para 2: "The three companies best positioned to capture this are already operating at scale, and" + edit: ~~it would be incredibly difficult for a late entrant to meaningfully compete~~ → no late entrant can compete + "without a fundamentally different architecture."
+- Para 3 (clean): "We have conviction in Lattice specifically because they own the compiler layer. Their approach to kernel fusion gives them a structural cost advantage that compounds with each generation of hardware. The moat is not the model; it is the runtime."
+- Margin note on edit 1: "Don't hedge. Say what you mean."
+
+## Build order
+
+1. Create artboard F (1040x780, `#FAFAF7` background)
+2. Build F incrementally: transparent title area > three-column structure > left margin metadata > title + rule > para 1 with inline edits + gutter mark > para 2 with inline edits > para 3 clean > right margin annotation > centered status text
+3. Screenshot + review checkpoint (verify: no cards, no fills, typography-only hierarchy, single red)
+4. Create artboard G (1040x780, `#1D1A16` background)
+5. Build G with same structure: title area > three columns > left metadata > title (light weight) + rule > para 1 > para 2 > para 3 > margin annotation with thin vertical line > status
+6. Screenshot + review checkpoint (verify: no card backgrounds, text on surface, warm luminous marks)
+7. 2x screenshots of both for typography detail check
+8. `finish_working_on_nodes`
+
+## Anti-slop checklist (verify at each checkpoint)
+
+- [ ] No background fills on annotations or edited paragraphs
+- [ ] No rounded-corner containers
+- [ ] No colored label headers (EDIT 1, etc.)
+- [ ] Additions rendered in body-text color (not a separate accent)
+- [ ] Only ONE non-gray color per artboard (the redline)
+- [ ] Status bar has no background — just floating text
+- [ ] Title bar has no background — just traffic lights and text
+- [ ] Margin notes are just italic text (+ optional thin rule), no cards
+- [ ] Typography creates all hierarchy (weight, size, italic), not color or containers
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/samaydhawan/.claude/projects/-Users-samaydhawan-Projects-active-marginalia/cabebfc4-7812-46b3-8e49-176d6ca20d06.jsonl
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
