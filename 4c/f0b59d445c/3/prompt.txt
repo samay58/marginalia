@@ -1,0 +1,140 @@
+Implement the following plan:
+
+# Plan: Revise F & G Artboards — Four Fixes
+
+## Context
+
+Artboards F ("The Redline", light, `8A-0`) and G ("The Margin", dark, `9F-0`) are built and structurally sound. Four revisions needed based on user feedback:
+
+1. **Bring back addition color** — earlier designs (A, B, original) had teal/green text for additions. F/G made additions body-text color, losing a visual element the user loves. Need a desaturated, warm green for additions alongside the red for deletions.
+2. **Annotation position** — the circled ① and margin note must sit vertically adjacent to the edit they reference, not at a fixed offset.
+3. **Left sidebar as change navigator** — repurpose from static document metadata ("Investment Memo / DRAFT 1 · CLAUDE") into a scannable change summary with edit labels that conceptually navigate to each edit.
+4. **Kill the left accent ribbon** on the dark-mode annotation — the thin vertical rule next to the annotation in G reads as AI slop. Replace with a faint radial glow behind the annotation number, something more Rauno/editorial.
+
+## Existing node IDs
+
+**F — The Redline (`8A-0`)**
+- Left Margin: `8J-0` (contains `8K-0` "Investment Memo", `8L-0` "DRAFT 1 · CLAUDE")
+- Manuscript Column: `8M-0`
+- Para 1 container: `8P-0`, Gutter Mark: `8Q-0`
+- Para 1 text fragments: `8U-0` (body), `8V-0` (deletion), `8W-0` (space), `8X-0` ("We think" — addition), `8Y-0` (continuation)
+- Para 2 container: `8Z-0`
+- Para 2 text fragments: `91-0` (body), `92-0` (deletion), `93-0` (space), `94-0` ("no late entrant..." — addition), `95-0` (continuation)
+- Para 3: `96-0`
+- Right Margin: `98-0` (contains Annotation `99-0` with number `9A-0`/`9B-0` and text `9C-0`)
+- Status Bar: `9D-0`
+
+**G — The Margin (`9F-0`)**
+- Left Margin: `9O-0` (contains `9P-0` "Investment Memo", `9Q-0` "DRAFT 1 · CLAUDE")
+- Manuscript Column: `9R-0`
+- Para 1 container: `9U-0`, Gutter Mark: `9V-0`
+- Para 1 text fragments: `9Z-0` (body), `A0-0` (deletion), `A1-0` (space), `A2-0` ("We think" — addition), `A3-0` (continuation)
+- Para 2 container: `A4-0`
+- Para 2 text fragments: `A6-0` (body), `A7-0` (deletion), `A8-0` (space), `A9-0` ("no late entrant..." — addition), `AA-0` (continuation)
+- Para 3: `AB-0`
+- Right Margin: `AD-0` (contains Accent Rule `AF-0`, Annotation Number `AH-0`/`AI-0`, text `AJ-0`)
+- Status Bar: `AK-0`
+
+## Revision 1: Addition text color
+
+The earlier designs used a teal/cyan. The plan critique said it was "too saturated and digital." Solution: use a desaturated, warm-shifted sage green that feels like a green pencil mark, not a UI accent.
+
+**Light (F):**
+- Addition color: `#4E7E6B` — muted sage green. Warm, reads as "green ink" not "UI teal."
+- Apply to: `8X-0` ("We think"), `94-0` ("no late entrant can compete")
+- Keep weight at 500 (medium) for subtle emphasis alongside the color.
+
+**Dark (G):**
+- Addition color: `#8DB09A` — lighter sage, luminous against walnut. Same hue family as F.
+- Apply to: `A2-0` ("We think"), `A9-0` ("no late entrant can compete")
+- Keep weight at 500.
+
+**Execution:** `update_styles` on 4 text nodes total (2 per artboard) to change `color`.
+
+## Revision 2: Annotation vertical alignment
+
+Currently the right margin annotation sits at a fixed `padding-top: 88px`. It needs to align with edit 1 in para 1 — specifically the deletion/addition line.
+
+Looking at the layout: the edit in para 1 starts after "anyone expected." which is roughly line 2-3 of para 1. The annotation should sit at the same vertical level as the gutter mark ①.
+
+**Execution:** Adjust `padding-top` on the Right Margin containers (`98-0` for F, `AD-0` for G) so the annotation aligns with the first edit. Likely needs to increase slightly or be tuned by screenshot.
+
+## Revision 3: Left sidebar as change navigator
+
+Replace the static metadata with a change summary. Structure:
+
+```
+CHANGES
+─────────────────
+①  Removed hedging
+   "In our assessment..."
+
+②  Tightened language
+   "it would be incredibly..."
+```
+
+- "CHANGES" header in DM Sans small caps (same style as old "DRAFT 1 · CLAUDE")
+- Each entry: circled number + short label in DM Sans 300 + truncated quote of the deletion in EB Garamond/Crimson Pro italic at smaller size
+- Thin rule under "CHANGES" header
+- Keep the same 180px width
+
+**Execution:** Replace contents of Left Margin (`8J-0` for F, `9O-0` for G) using `write_html` with mode `insert-children` after deleting existing children, OR use `replace` on the existing text nodes and add new ones.
+
+Actually, cleanest approach: delete existing left margin children and rebuild with `write_html` insert-children into the left margin frame.
+
+## Revision 4: Replace accent ribbon with radial glow
+
+The thin vertical `#CF7B63` rule (`AF-0`) in G's annotation reads as template slop.
+
+Replace with: a faint radial glow behind the circled annotation number. This is a soft, warm radial gradient circle — very low opacity — centered on the ① circle. Like a soft halo of lamplight around the mark.
+
+**Light (F):** Currently has no ribbon (just circled number + italic text). Add a very faint warm glow behind the annotation number: a ~40px circle with `#C0503E` at ~6-8% opacity using `radial-gradient` or a low-opacity background.
+
+**Dark (G):** Delete the accent rule (`AF-0`). Add a ~40px soft glow circle behind the annotation number: `#CF7B63` at ~10-12% opacity. Against the dark surface this will read as a warm halo.
+
+**Execution:**
+- G: Delete `AF-0` (accent rule). Add a glow div behind the annotation number in `AH-0`'s parent.
+- F: Add a similar but more subtle glow to `9A-0`'s parent.
+- Use `background: radial-gradient(circle, rgba(color, opacity) 0%, transparent 70%)` on a container around the number.
+
+## Revision 5: Subtle paper texture
+
+Add a faint paper-like texture to both artboard backgrounds so they feel like manuscript paper rather than flat digital surfaces.
+
+**Approach:** An overlay div covering the full artboard with a very subtle CSS noise/grain pattern at extremely low opacity. This sits behind all content but on top of the flat background color.
+
+**Light (F):** A full-size absolute-positioned div with a subtle repeating radial-gradient pattern (tiny dots in slightly darker warm tone `#F0EFE9` at ~30% opacity) creating a fine paper grain. Barely perceptible — you feel it more than see it.
+
+**Dark (G):** Same technique but inverted — tiny lighter specks (`#2A2621` dots) against the walnut. Even more subtle since dark surfaces need less texture to read as material.
+
+**Execution:** Add a single overlay div as the first child of each artboard, absolutely positioned, full width/height, with `pointer-events: none` conceptually (it won't block interaction in Paper since it's just a visual). Use CSS `background-image` with a fine repeating `radial-gradient` pattern.
+
+## Build order
+
+1. **Revision 5** — Add paper texture overlays to both artboards (do first since it goes behind everything)
+2. **Revision 1** — Update addition text colors (4 nodes, parallel `update_styles`)
+3. **Revision 3** — Rebuild left sidebars (replace content of `8J-0` and `9O-0`)
+4. **Revision 2** — Adjust annotation vertical position (tune `padding-top` on `98-0` and `AD-0`)
+5. **Revision 4** — Replace ribbon with radial glow (delete `AF-0`, add glow divs to both)
+6. Screenshot both at 1x — review checkpoint
+7. Screenshot both at 2x — typography detail check
+8. `finish_working_on_nodes`
+
+## Anti-slop checklist (revised)
+
+- [ ] No background fills on annotations or edited paragraphs (glow is on the NUMBER only, very faint)
+- [ ] No rounded-corner containers
+- [ ] No colored label headers ("EDIT 1" etc.)
+- [ ] Additions in desaturated sage green — distinct but tasteful, not "UI teal"
+- [ ] TWO accent colors per artboard: red/terra cotta (deletions) + sage (additions). Both desaturated, both warm.
+- [ ] Status bar has no background
+- [ ] Title bar has no background
+- [ ] Margin notes are italic text with faint number glow, no cards, no ribbons
+- [ ] Left sidebar is functional (change navigator), not decorative metadata
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/samaydhawan/.claude/projects/-Users-samaydhawan-Projects-active-marginalia/e6ac7c1c-9cec-43d8-ae76-4fa055241a7d.jsonl
+
+---
+
+Tool loaded.

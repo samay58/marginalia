@@ -3,7 +3,7 @@
   "checkpoint_id": "4cf0b59d445c",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 8,
+  "checkpoints_count": 9,
   "files_touched": [
     "CHANGELOG.md",
     "POLISH-SPEC.md",
@@ -47,13 +47,19 @@
       "transcript": "/4c/f0b59d445c/2/full.jsonl",
       "content_hash": "/4c/f0b59d445c/2/content_hash.txt",
       "prompt": "/4c/f0b59d445c/2/prompt.txt"
+    },
+    {
+      "metadata": "/4c/f0b59d445c/3/metadata.json",
+      "transcript": "/4c/f0b59d445c/3/full.jsonl",
+      "content_hash": "/4c/f0b59d445c/3/content_hash.txt",
+      "prompt": "/4c/f0b59d445c/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 610,
-    "cache_creation_tokens": 482554,
-    "cache_read_tokens": 13192579,
-    "output_tokens": 67569,
-    "api_call_count": 160
+    "input_tokens": 3216,
+    "cache_creation_tokens": 566828,
+    "cache_read_tokens": 14916883,
+    "output_tokens": 86209,
+    "api_call_count": 190
   }
 }

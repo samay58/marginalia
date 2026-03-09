@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "4cf0b59d445c",
+  "session_id": "4dd08342-f3fb-4737-8758-617a7f78e963",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T07:29:29.605024Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CHANGELOG.md",
+    "POLISH-SPEC.md",
+    "README.md",
+    "WALKTHROUGH.md",
+    "src-tauri/tauri.conf.json",
+    "src/app.css",
+    "src/app.html",
+    "src/lib/site/CopyBlock.svelte",
+    "src/lib/site/reveal.js",
+    "src/lib/styles/site.css",
+    "src/routes/(marketing)/+layout.svelte",
+    "src/routes/(marketing)/+page.svelte",
+    "src/routes/+layout.svelte",
+    "src/routes/review/+page.svelte"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "70cc237476b7",
+  "token_usage": {
+    "input_tokens": 2606,
+    "cache_creation_tokens": 84274,
+    "cache_read_tokens": 1724304,
+    "output_tokens": 18640,
+    "api_call_count": 30
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T07:29:29.49167Z",
+    "agent_lines": 2633,
+    "human_added": 2097,
+    "human_modified": 444,
+    "human_removed": 0,
+    "total_committed": 5174,
+    "agent_percentage": 50.889060688055665
+  }
+}
