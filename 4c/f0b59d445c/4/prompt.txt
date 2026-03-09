@@ -1,0 +1,13 @@
+Run /close from ~/phoenix/.claude/commands please so we log this work in our daily journal.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
