@@ -1,0 +1,93 @@
+Implement the following plan:
+
+# Plan: Two New Marginalia Design Directions in Paper
+
+## Context
+
+We've built 4 artboards exploring Marginalia's visual identity — a warm editorial review surface (Source Serif 4), an old-world galley (Cormorant Garamond), a literary journal (EB Garamond), and an intimate writer's proof (Lora). All are light-mode, warm-to-cool variations on the same spatial template. The user wants two more genuinely different explorations that still evoke the core ethos: editorial redline, manuscript intimacy, the pleasure of precise revision, margins as thinking space.
+
+## Existing artboards (DO NOT TOUCH)
+
+- `1-0` — Marginalia - Active Review (1280x1050)
+- `26-0` — A — The Galley (1040x780)
+- `27-0` — B — The Review (1040x780)
+- `28-0` — C — The Writer's Proof (1040x780)
+
+## Direction D: "The Study" — Evening reading by lamplight
+
+A dark-mode direction, but NOT code-editor dark. The feeling of reading proofs late at night at a warm desk. Walnut and aged leather, not charcoal and neon.
+
+**Palette:**
+- Background: `#2C2620` (deep warm walnut)
+- Text: `#E8E0D4` (warm cream on dark)
+- Redline: `#D4775A` (warm coral — luminous against the dark, like a red pencil catching lamplight)
+- Additions: `#C9B896` (aged gold/parchment — subtle warmth, like pencil-in-margin)
+- Chrome: `#6B6158` (muted warm brown)
+- Dividers: `#3D352E` (barely visible warm rule)
+
+**Typography:**
+- Body: Crimson Pro, 400, 18px, line-height 30px — elegant, high-contrast serif that reads beautifully on dark backgrounds
+- Headings: Crimson Pro, 700, 32px — dramatic weight contrast
+- UI: DM Sans, 300, 11px — whisper-quiet
+- Annotations: Crimson Pro, 400 italic, 14px — warm, personal
+
+**Layout:** 1040x780. Same three-zone structure but the margins feel darker, more enveloping. The text column is a pool of warm light in a dark room. The annotation in the margin has a subtle warm glow (very faint background tint).
+
+**What makes it different:** Every other direction is light-mode. This one explores whether the editorial intimacy can survive (and even deepen) in a dark environment. The redline marks should feel luminous — not error-red but ember-warm, like a mark that catches the light. The emotional register shifts from "desk in daylight" to "desk at midnight."
+
+**Content:** Same memo passage (inference infrastructure) with the same two edits and margin note.
+
+---
+
+## Direction E: "The Proof Sheet" — High-contrast modernist editorial
+
+The opposite of cozy. Stark, precise, authoritative. A freshly printed proof sheet under bright light. Think Penguin Modern Classics cover design, or a broadsheet editorial page. Monochrome except for a single, confident red.
+
+**Palette:**
+- Background: `#FCFCFA` (near-white, bright but not clinical)
+- Text: `#141414` (near-black, very high contrast)
+- Redline: `#CC3322` (single saturated editorial red — the ONLY color)
+- Additions: `#141414` (same as body text, medium weight — clean text = approved)
+- Chrome: `#B0B0B0` (neutral mid-gray)
+- Dividers: `#141414` (strong black rules — structural, not decorative)
+
+**Typography:**
+- Body: Charter, 400, 17px, line-height 28px — designed for clarity at small sizes, workhorse editorial serif, Matthew Carter precision
+- Headings: Charter, 900 (Black), 28px, letter-spacing -0.02em — heavy and authoritative
+- UI: IBM Plex Sans, 400, 10px, letter-spacing 0.06em, uppercase — production metadata
+- Annotations: Charter, 400 italic, 13px — brief, sharp
+
+**Layout:** 1040x780. Distinctive feature: a strong horizontal rule under the title (2px black), and another above the status bar. The manuscript column is tighter (~500px). Wide empty margins that feel intentional and modernist, not just unused space. The annotation sits in the right margin with a thin vertical red rule as its only decoration.
+
+**What makes it different:** Maximum contrast, minimum decoration. One color (red) against monochrome. Strong structural rules. Charter's workmanlike clarity vs. the more decorative serifs in other directions. The mood is not warm or intimate — it's precise, awake, almost severe. The pleasure here isn't coziness, it's the satisfaction of a perfectly sharp pencil on bright white paper.
+
+**Content:** Same memo passage, same edits, same margin note.
+
+---
+
+## Build order
+
+1. Create artboard D (1040x780, dark walnut background)
+2. Build D incrementally: title bar > content structure > title > edited paragraphs > clean paragraph > margin annotation > status bar
+3. Screenshot + review checkpoint
+4. Create artboard E (1040x780, near-white background)
+5. Build E incrementally: title bar > content structure > title with heavy rule > edited paragraphs > clean paragraph > margin annotation > status bar with rule
+6. Screenshot + review checkpoint
+7. `finish_working_on_nodes`
+
+## Verification
+
+- Screenshot each artboard at 1x to verify layout, color, and mood
+- Screenshot at 2x to verify typography details and redline legibility
+- Confirm all 6 artboards exist and none of the original 4 were modified
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/samaydhawan/.claude/projects/-Users-samaydhawan-Projects-active-marginalia/4da7d1cf-40fd-495a-9a3e-fa411f76bf0f.jsonl
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.
