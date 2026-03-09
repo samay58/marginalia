@@ -6,7 +6,11 @@
   import Header from '$lib/components/Header.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import ChangeRail from '$lib/components/ChangeRail.svelte';
+  import AnnotationColumn from '$lib/components/AnnotationColumn.svelte';
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
+  import ReferencePane from '$lib/components/ReferencePane.svelte';
+  import SessionDrawer from '$lib/components/SessionDrawer.svelte';
+  import StatusBar from '$lib/components/StatusBar.svelte';
   import { createViolationMatchers, createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import { createToneMatchers } from '$lib/utils/tone-lint.js';
   import { collectLintFindings } from '$lib/utils/lint.js';
@@ -17,10 +21,10 @@
     editedContent,
     generalNotes,
     hasChanges,
-    changeSummary,
     diffResult,
     currentLine,
     annotations,
+    annotatedChanges,
     slopMatchers,
     startTime,
     initializeWithContent,
@@ -34,6 +38,12 @@
     originalPlainText,
     updatePlainText,
     editedPlainText,
+    selectedChangeId,
+    selectedChange,
+    rightPaneMode,
+    setSelectedChange,
+    clearSelectedChange,
+    setRightPaneMode,
   } from '$lib/stores/app.js';
   import { generateBundle } from '$lib/utils/bundle.js';
   import { computeDiff } from '$lib/utils/diff.js';
@@ -41,15 +51,20 @@
 
   // Local state
   let notesExpanded = $state(false);
+  let compactLayout = $state(false);
+  let referenceDrawerOpen = $state(false);
   let popoverVisible = $state(false);
   let popoverX = $state(0);
   let popoverY = $state(0);
   let popoverChangeId = $state('');
   let popoverText = $state('');
   let popoverRationale = $state('');
+  let popoverCategory = $state('');
   let isDark = $state(false);
   /** @type {any} */
-  let editorRef = null;
+  let editorRef = $state(null);
+  /** @type {any} */
+  let annotationColumnRef = $state(null);
   /** @type {Array<{ path: string, name: string, content: string }>} */
   let referenceFiles = $state([]);
   let activeReferenceIndex = $state(0);
@@ -79,6 +94,15 @@
   let isHydratingSnapshot = $state(false);
   let hasInitialDocument = $state(false);
   let degradedMode = $state(false);
+  const initialTauriAvailable = (() => {
+    try {
+      // @ts-expect-error present only in Tauri runtime
+      return typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+    } catch {
+      return false;
+    }
+  })();
+  let tauriAvailable = $state(initialTauriAvailable);
   /** @type {string[]} */
   let degradedReasons = $state([]);
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -100,6 +124,9 @@
   );
 
   const mutedLintCount = $derived.by(() => mutedLintRuleIds.size);
+  const editCount = $derived.by(() => $diffResult?.changes?.length ?? 0);
+  const slopLines = $derived.by(() => new Set(liveLintFindings.map((finding) => finding.line)));
+  const statusAutosaveLabel = $derived.by(() => getAutosaveLabel());
 
   /**
    * @param {import('$lib/utils/lint.js').LintMatcher} matcher
@@ -287,6 +314,9 @@
         edited_plain_text: $editedPlainText,
         general_notes: $generalNotes,
         annotations: serializedAnnotations,
+        selected_change_id: $selectedChangeId,
+        right_pane_mode: $rightPaneMode,
+        session_drawer_open: notesExpanded,
         degraded_mode: degradedMode,
         degraded_reasons: [...degradedReasons],
         cli_options: {
@@ -390,6 +420,10 @@
   async function loadDocumentFromPath(path) {
     degradedMode = false;
     degradedReasons = [];
+    notesExpanded = false;
+    referenceDrawerOpen = false;
+    clearSelectedChange();
+    setRightPaneMode('annotations');
     const content = await invoke('read_file', { path });
     initializeWithContent(path, content);
     hasInitialDocument = true;
@@ -414,14 +448,17 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
 ## Notes
 
-Avoid hedging. No filler. Say what we mean and quantify the miss.`;
+  Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
+    if (!tauriAvailable) return;
+
     /** @type {() => void} */
     let cleanup = () => {};
 
     const init = async () => {
       restoreDensityMode();
+      updateLayoutMode();
 
       // Check for CLI options and load initial document (or recovery prompt)
       try {
@@ -496,12 +533,14 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
         document.documentElement.classList.toggle('dark', isDark);
       };
       mediaQuery.addEventListener('change', handleChange);
+      window.addEventListener('resize', updateLayoutMode);
 
       await restoreReferenceFiles();
 
       return () => {
         clearAutosaveTimer();
         mediaQuery.removeEventListener('change', handleChange);
+        window.removeEventListener('resize', updateLayoutMode);
         if (closeRequestedUnlisten) {
           closeRequestedUnlisten();
         }
@@ -523,14 +562,31 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     };
   });
 
+  function updateLayoutMode() {
+    if (typeof window === 'undefined') return;
+    compactLayout = window.innerWidth < 1180;
+    if (!compactLayout) {
+      referenceDrawerOpen = false;
+    }
+  }
+
   $effect(() => {
     // Trigger autosave when user-editable session data changes.
     $editedContent;
     $editedPlainText;
     $generalNotes;
     $annotations;
+    $selectedChangeId;
+    $rightPaneMode;
+    notesExpanded;
     if (!sessionId || !snapshotPath || !hasInitialDocument || isHydratingSnapshot) return;
     scheduleAutosave('content-change');
+  });
+
+  $effect(() => {
+    if ($selectedChangeId && !$selectedChange) {
+      clearSelectedChange();
+    }
   });
 
   /** @param {string} principlesPath */
@@ -711,7 +767,12 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
       generalNotes: snapshot.general_notes || '',
       annotations: snapshot.annotations || [],
       startedAt: snapshot.started_at || null,
+      selectedChangeId: snapshot.selected_change_id || null,
+      rightPaneMode: snapshot.right_pane_mode || 'annotations',
     });
+
+    notesExpanded = snapshot.session_drawer_open === true;
+    referenceDrawerOpen = false;
 
     hasInitialDocument = true;
     sessionId = recoveryCandidate.sessionId || createSessionId();
@@ -878,6 +939,12 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
   }
 
   /** @param {KeyboardEvent} event */
+  function handleWindowKeydown(event) {
+    if (!tauriAvailable) return;
+    handleKeydown(event);
+  }
+
+  /** @param {KeyboardEvent} event */
   function handleKeydown(event) {
     if (recoveryCandidate) {
       if (event.key === 'Escape') {
@@ -889,6 +956,8 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     if (event.key === 'Escape') {
       if (popoverVisible) {
         popoverVisible = false;
+      } else if (referenceDrawerOpen) {
+        referenceDrawerOpen = false;
       } else {
         handleDone();
       }
@@ -898,18 +967,15 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     }
     if (event.metaKey && event.key === 'g') {
       event.preventDefault();
-      notesExpanded = !notesExpanded;
+      toggleSessionDrawer();
     }
     if (event.metaKey && event.key === '/') {
       event.preventDefault();
-      const nearest = findNearestChange($currentLine ?? 1);
-      if (!nearest) return;
-      editorRef?.scrollToLine(nearest.location.line);
-      openChangePopover(nearest);
+      handleAnnotationShortcut();
     }
     if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'o') {
       event.preventDefault();
-      pickReferenceFile();
+      toggleReferenceSurface();
       return;
     }
     if (event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'o') {
@@ -942,10 +1008,58 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
   /** @param {number} x @param {number} y */
   function positionPopoverAt(x, y) {
     const margin = 16;
-    const maxX = window.innerWidth - 320 - margin;
+    const maxX = window.innerWidth - 384 - margin;
     const maxY = window.innerHeight - 350;
     popoverX = Math.min(Math.max(margin, x), maxX);
     popoverY = Math.min(Math.max(80, y), maxY);
+  }
+
+  function toggleSessionDrawer() {
+    notesExpanded = !notesExpanded;
+  }
+
+  async function toggleReferenceSurface() {
+    if (referenceFiles.length === 0) {
+      const picked = await pickReferenceFile();
+      if (!picked) return;
+    }
+
+    if (compactLayout) {
+      referenceDrawerOpen = !referenceDrawerOpen;
+    } else {
+      setRightPaneMode($rightPaneMode === 'reference' ? 'annotations' : 'reference');
+    }
+  }
+
+  function focusAnnotationComposer() {
+    queueMicrotask(() => {
+      annotationColumnRef?.focusComposer?.();
+    });
+  }
+
+  /**
+   * @param {import('$lib/utils/diff.js').Change | null} change
+   * @param {{ x?: number, y?: number, focusAnnotation?: boolean, openPopover?: boolean }} [options]
+   */
+  function selectChange(change, options = {}) {
+    if (!change) return;
+
+    const { x = NaN, y = NaN, focusAnnotation = false, openPopover = compactLayout } = options;
+    setSelectedChange(change.id);
+    editorRef?.scrollToChange?.(change.id);
+
+    if (compactLayout) {
+      if (openPopover) {
+        openChangePopover(change, x, y);
+      }
+      return;
+    }
+
+    referenceDrawerOpen = false;
+    setRightPaneMode('annotations');
+    if (focusAnnotation) {
+      focusAnnotationComposer();
+    }
   }
 
   /**
@@ -966,6 +1080,7 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     popoverChangeId = change.id;
     popoverText = change.text;
     popoverRationale = existingAnnotation?.rationale || '';
+    popoverCategory = existingAnnotation?.category || '';
     popoverVisible = true;
   }
 
@@ -987,6 +1102,12 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     return nearest;
   }
 
+  function handleAnnotationShortcut() {
+    const nearest = findNearestChange($currentLine ?? 1);
+    if (!nearest) return;
+    selectChange(nearest, { focusAnnotation: true, openPopover: compactLayout });
+  }
+
   /**
    * @param {import('$lib/utils/diff.js').Change} change
    * @param {number} x
@@ -994,29 +1115,50 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
    */
   function handleRailChangeSelect(change, x, y) {
     if (!change) return;
-    editorRef?.scrollToLine(change.location.line);
-    openChangePopover(change, x, y);
+    selectChange(change, { x, y, openPopover: compactLayout });
   }
 
   /** @param {string} changeId @param {string} text @param {number} x @param {number} y */
   function handleEditorChangeClick(changeId, text, x, y) {
     const change = $diffResult?.changes.find((item) => item.id === changeId) || null;
     if (change) {
-      openChangePopover(change, x, y);
+      selectChange(change, {
+        x,
+        y,
+        focusAnnotation: !compactLayout,
+        openPopover: compactLayout,
+      });
       return;
     }
     // Fallback for stale click payloads.
-    openChangePopover(
-      {
-        id: changeId,
-        type: 'insertion',
-        text,
-        editedOffset: 0,
-        location: { line: $currentLine ?? 1, col: 0 },
-      },
-      x,
-      y
-    );
+    if (compactLayout) {
+      openChangePopover(
+        {
+          id: changeId,
+          type: 'insertion',
+          text,
+          editedOffset: 0,
+          location: { line: $currentLine ?? 1, col: 0 },
+        },
+        x,
+        y
+      );
+    }
+  }
+
+  /** @param {string} changeId @param {number} x @param {number} y */
+  function handleAnchorSelect(changeId, x, y) {
+    const change = $diffResult?.changes.find((item) => item.id === changeId) || null;
+    if (!change) return;
+    selectChange(change, { x, y, openPopover: compactLayout });
+  }
+
+  /**
+   * @param {import('$lib/utils/diff.js').Change} change
+   */
+  function handleAnnotationCardSelect(change) {
+    if (!change) return;
+    selectChange(change, { focusAnnotation: true, openPopover: compactLayout });
   }
 
   /** @param {Event & { currentTarget: HTMLTextAreaElement }} event */
@@ -1056,6 +1198,7 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
   function handlePopoverSave(data) {
     const { changeId, rationale, category } = data;
     const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
+    setSelectedChange(changeId);
     setAnnotation(changeId, {
       changeIds: [changeId],
       rationale,
@@ -1110,12 +1253,36 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleWindowKeydown} />
 
+{#if !tauriAvailable}
+  <div class="web-fallback">
+    <div class="web-fallback-inner glass-surface glass-surface-ambient">
+      <div class="web-fallback-badge">Desktop-only review UI</div>
+      <h1 class="web-fallback-title">Marginalia Review</h1>
+      <p class="web-fallback-copy">
+        This route runs inside the Marginalia macOS app (it relies on Tauri file APIs). For the overview and install steps, head to
+        the homepage.
+      </p>
+      <div class="web-fallback-actions">
+        <a class="web-fallback-btn control-motion control-focus control-raise" href="/">Go to the homepage</a>
+        <a
+          class="web-fallback-btn secondary control-motion control-focus control-raise"
+          href="https://github.com/samay58/marginalia"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+{:else}
 <div class="app" class:density-review={densityMode === 'review'} class:density-manuscript={densityMode === 'manuscript'}>
   <Header
     filename={$filename}
     hasChanges={$hasChanges}
+    editCount={editCount}
     {densityMode}
     onSetDensity={setDensityMode}
     onDone={handleDone}
@@ -1152,168 +1319,227 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     </div>
   {/if}
 
-  <main class="main">
+  <main class="desk" class:compact={compactLayout}>
     <ChangeRail
       diffResult={$diffResult}
       annotations={$annotations}
+      slopLines={slopLines}
+      selectedChangeId={$selectedChangeId}
       currentLine={$currentLine}
       onSelectChange={handleRailChangeSelect}
     />
 
-    <div class="editor-container">
+    <div class="editor-column">
       <Editor
         bind:this={editorRef}
         content={$editedContent}
+        diffResult={$diffResult}
+        annotations={$annotations}
+        slopLines={slopLines}
+        selectedChangeId={$selectedChangeId}
+        {densityMode}
         onChange={handleContentChange}
         onPlainTextChange={handlePlainTextChange}
         onInitialRender={handleInitialRender}
         onLineChange={handleLineChange}
         getDiffResult={() => $diffResult}
         onClickChange={handleEditorChangeClick}
+        onSelectAnchor={handleAnchorSelect}
         getSlopMatchers={() => $slopMatchers}
         onRuntimeError={handleEditorRuntimeError}
       />
     </div>
 
-    {#if referenceFiles.length > 0}
-      <aside class="reference-panel glass-surface glass-surface-static">
-        <div class="reference-header">
-          <span>Reference</span>
-          <button class="reference-open control-motion control-focus control-raise" onclick={pickReferenceFile} title="Open reference (⌘⇧O)">
-            ⌘⇧O
+    {#if !compactLayout}
+      <section class="right-pane-shell">
+        <div class="right-pane-switch">
+          <button
+            type="button"
+            class="mode-option control-motion control-focus"
+            class:active={$rightPaneMode === 'annotations'}
+            onclick={() => setRightPaneMode('annotations')}
+          >
+            Annotations
+          </button>
+          <button
+            type="button"
+            class="mode-option control-motion control-focus"
+            class:active={$rightPaneMode === 'reference'}
+            onclick={toggleReferenceSurface}
+          >
+            {referenceFiles.length > 0 ? 'Reference' : 'Add Reference'}
           </button>
         </div>
 
-        <div class="reference-tabs">
-          {#each referenceFiles as ref, index}
-            <button
-              class="reference-tab control-motion control-focus"
-              class:active={index === activeReferenceIndex}
-              onclick={() => activeReferenceIndex = index}
-              title={ref.path}
-            >
-              {ref.name}
-            </button>
-          {/each}
-        </div>
-
-        <div class="reference-content">
-          <pre>{referenceFiles[activeReferenceIndex]?.content}</pre>
-        </div>
-      </aside>
-    {/if}
-  </main>
-
-  <footer class="notes-panel glass-surface glass-surface-static" class:expanded={notesExpanded}>
-    <button class="notes-toggle control-motion control-focus" onclick={() => notesExpanded = !notesExpanded}>
-      <span class="notes-icon">{notesExpanded ? '▾' : '▸'}</span>
-      <span>General notes</span>
-      {#if $changeSummary !== 'No changes'}
-        <span class="change-summary">({$changeSummary})</span>
-      {/if}
-      {#if sessionId}
-        <span class="autosave-state" class:error={autosaveState === 'error'}>
-          {getAutosaveLabel()}
-        </span>
-      {/if}
-    </button>
-    {#if notesExpanded}
-      <textarea
-        class="notes-input control-focus"
-        value={$generalNotes}
-        oninput={handleNotesChange}
-        placeholder="Add session-level feedback here..."
-      ></textarea>
-
-      <section class="lint-panel">
-        <div class="lint-panel-header">
-          <label class="lint-toggle control-focus">
-            <input
-              type="checkbox"
-              checked={toneLintEnabled}
-              onchange={handleToneLintToggle}
-            />
-            <span>Tone lint</span>
-          </label>
-          <span class="lint-count">{liveLintFindings.length} active flag{liveLintFindings.length === 1 ? '' : 's'}</span>
-        </div>
-
-        {#if mutedLintCount > 0}
-          <div class="lint-muted-row">
-            <span>{mutedLintCount} rule{mutedLintCount === 1 ? '' : 's'} ignored this session</span>
-            <button
-              class="lint-clear control-motion control-focus control-raise"
-              onclick={clearIgnoredLintRules}
-            >
-              Clear
-            </button>
-          </div>
-        {/if}
-
-        {#if liveLintFindings.length === 0}
-          <p class="lint-empty">No active lint flags.</p>
+        {#if $rightPaneMode === 'reference'}
+          <ReferencePane
+            {referenceFiles}
+            {activeReferenceIndex}
+            onSelectIndex={(index) => activeReferenceIndex = index}
+            onPickReferenceFile={pickReferenceFile}
+          />
         {:else}
-          <ul class="lint-list">
-            {#each liveLintFindings as finding, idx (`${finding.rule_id}-${finding.line}-${idx}`)}
-              <li class="lint-item">
-                <div class="lint-item-top">
-                  <span class="lint-label">{finding.label}</span>
-                  <span class="lint-line">L{finding.line}</span>
-                </div>
-                <p class="lint-why">Why: matched "{finding.match}"</p>
-                <p class="lint-snippet">"{finding.snippet}"</p>
-                {#if finding.suggestion}
-                  <p class="lint-suggestion">Suggestion: {finding.suggestion}</p>
-                {/if}
-                <button
-                  class="lint-ignore control-motion control-focus control-raise"
-                  onclick={() => ignoreLintRuleForSession(finding.rule_id)}
-                >
-                  Ignore For Session
-                </button>
-              </li>
-            {/each}
-          </ul>
+          <AnnotationColumn
+            bind:this={annotationColumnRef}
+            selectedChange={$selectedChange}
+            annotations={$annotations}
+            annotatedChanges={$annotatedChanges}
+            lintFindings={liveLintFindings}
+            {densityMode}
+            onSelectChange={handleAnnotationCardSelect}
+            onSave={handlePopoverSave}
+            onRemove={handlePopoverRemove}
+          />
         {/if}
       </section>
     {/if}
-  </footer>
+  </main>
+
+  {#if compactLayout && referenceDrawerOpen}
+    <div
+      class="reference-drawer-scrim"
+      role="button"
+      tabindex="-1"
+      aria-label="Close reference drawer"
+      onclick={() => referenceDrawerOpen = false}
+      onkeydown={(event) => event.key === 'Escape' && (referenceDrawerOpen = false)}
+    ></div>
+    <div class="reference-drawer">
+      <ReferencePane
+        {referenceFiles}
+        {activeReferenceIndex}
+        onSelectIndex={(index) => activeReferenceIndex = index}
+        onPickReferenceFile={pickReferenceFile}
+      />
+    </div>
+  {/if}
+
+  <SessionDrawer
+    open={notesExpanded}
+    generalNotes={$generalNotes}
+    {toneLintEnabled}
+    liveLintFindings={liveLintFindings}
+    {mutedLintCount}
+    onNotesInput={handleNotesChange}
+    onToneLintToggle={handleToneLintToggle}
+    onIgnoreLintRule={ignoreLintRuleForSession}
+    onClearIgnored={clearIgnoredLintRules}
+  />
+
+  <StatusBar
+    {editCount}
+    slopCount={liveLintFindings.length}
+    annotationCount={$annotations.size}
+    autosaveLabel={statusAutosaveLabel}
+    {degradedMode}
+    drawerOpen={notesExpanded}
+    {compactLayout}
+    rightPaneMode={$rightPaneMode}
+    hasReferences={referenceFiles.length > 0}
+    onToggleDrawer={toggleSessionDrawer}
+    onToggleReference={toggleReferenceSurface}
+  />
 
   <AnnotationPopover
     changeId={popoverChangeId}
     text={popoverText}
     currentRationale={popoverRationale}
+    currentCategory={popoverCategory}
     x={popoverX}
     y={popoverY}
-    visible={popoverVisible}
+    visible={popoverVisible && compactLayout}
     onSave={handlePopoverSave}
     onRemove={handlePopoverRemove}
     onClose={handlePopoverClose}
   />
 </div>
+{/if}
 
 <style>
-  .app {
-    --density-rail-width: 300px;
-    --density-reference-width: 320px;
-    --density-notes-height: 100px;
-    --density-change-preview-size: 0.875rem;
+  .web-fallback {
     height: 100vh;
-    display: flex;
-    flex-direction: column;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    padding: 2rem;
     background: var(--paper);
+    color: var(--ink);
+  }
+
+  .web-fallback-inner {
+    max-width: 34rem;
+    border-radius: 14px;
+    border: 1px solid var(--paper-edge);
+    padding: 1.25rem 1.25rem;
+  }
+
+  .web-fallback-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--paper-edge);
+    background: color-mix(in srgb, var(--paper-bright) 65%, transparent);
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink-faded);
+  }
+
+  .web-fallback-title {
+    margin-top: 0.85rem;
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    letter-spacing: -0.02em;
+  }
+
+  .web-fallback-copy {
+    margin-top: 0.65rem;
+    color: var(--ink-faded);
+    line-height: 1.5;
+  }
+
+  .web-fallback-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+  }
+
+  .web-fallback-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 80%, transparent);
+    background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .web-fallback-btn.secondary {
+    background: transparent;
+    color: var(--ink-faded);
+  }
+
+  .app {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    background: var(--canvas-paper);
+    box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.04);
   }
 
   .app.density-manuscript {
-    --line-height: 1.6875rem;
+    --line-height: 1.875rem;
   }
 
   .app.density-review {
-    --line-height: 1.5rem;
-    --density-rail-width: 272px;
-    --density-reference-width: 296px;
-    --density-notes-height: 84px;
-    --density-change-preview-size: 0.8125rem;
+    --line-height: 1.75rem;
     --glass-bg-static: color-mix(in srgb, var(--paper) 95%, transparent);
   }
 
@@ -1422,313 +1648,113 @@ Avoid hedging. No filler. Say what we mean and quantify the miss.`;
     background: var(--accent-hover);
   }
 
-  .main {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-  }
-
   .degraded-banner {
-    border-bottom: 1px solid color-mix(in srgb, var(--struck-text) 25%, transparent);
-    background: color-mix(in srgb, var(--struck-bg) 65%, transparent);
-    color: var(--struck-text);
-    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid color-mix(in srgb, var(--slop-line) 30%, transparent);
+    background: color-mix(in srgb, var(--slop-bg) 78%, transparent);
+    color: color-mix(in srgb, var(--slop-ink) 80%, var(--ink));
+    padding: var(--space-2) var(--desk-padding-x);
     font-family: var(--font-ui);
     font-size: var(--text-ui);
     line-height: 1.4;
   }
 
-  /* Editor Container */
-  .editor-container {
-    flex: 1;
+  .desk {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: var(--desk-rail-width) minmax(0, 1fr) var(--desk-right-width);
+    gap: var(--desk-gap);
+    padding: var(--space-10) var(--desk-padding-x) 0;
+    overflow: hidden;
+  }
+
+  .app.density-review .desk {
+    padding-top: var(--space-8);
+  }
+
+  .desk.compact {
+    grid-template-columns: var(--desk-rail-width) minmax(0, 1fr);
+  }
+
+  .editor-column {
+    min-width: 0;
     overflow: hidden;
     display: flex;
     justify-content: center;
   }
 
-  .reference-panel {
-    width: var(--density-reference-width);
-    border-left: var(--border-subtle);
-    background: transparent;
+  .right-pane-shell {
+    width: var(--desk-right-width);
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
 
-  .reference-header {
+  .right-pane-switch {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: var(--space-3) var(--space-4);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    color: var(--ink-faded);
-    border-bottom: var(--border-subtle);
-  }
-
-  .reference-open {
-    background: none;
-    border: 1px solid var(--paper-edge);
-    border-radius: 6px;
-    padding: 2px 6px;
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-    cursor: pointer;
-  }
-
-  .reference-open:hover {
-    color: var(--ink);
-    border-color: var(--ink-ghost);
-  }
-
-  .reference-tabs {
-    display: flex;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    border-bottom: var(--border-subtle);
-    overflow-x: auto;
-  }
-
-  .reference-tab {
-    background: var(--paper);
-    border: 1px solid var(--paper-edge);
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: var(--text-ui-small);
-    color: var(--ink-faded);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .reference-tab.active {
-    color: var(--ink);
-    border-color: var(--accent-subtle);
-    background: var(--paper);
-  }
-
-  .reference-content {
-    flex: 1;
-    overflow: auto;
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .reference-content pre {
-    margin: 0;
-    font-family: var(--font-body);
-    font-size: var(--text-body);
-    color: var(--ink);
-    white-space: pre-wrap;
-  }
-
-  /* Notes Panel */
-  .notes-panel {
-    background: transparent;
-    border-top: var(--border-subtle);
-    transition: height var(--transition-normal);
-  }
-
-  .notes-toggle {
-    width: 100%;
-    padding: var(--space-3) var(--space-4);
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    background: none;
-    border: none;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    color: var(--ink-faded);
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .notes-toggle:hover {
-    color: var(--ink);
-  }
-
-  .notes-icon {
-    font-size: 10px;
-  }
-
-  .change-summary {
-    color: var(--ink-ghost);
-    font-size: var(--text-ui-small);
-    margin-left: auto;
-  }
-
-  .autosave-state {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    color: var(--ink-ghost);
-    border: 1px solid var(--paper-edge);
-    border-radius: 999px;
-    padding: 1px 8px;
-    margin-left: var(--space-2);
-  }
-
-  .autosave-state.error {
-    color: var(--struck-text);
-    border-color: color-mix(in srgb, var(--struck-text) 30%, transparent);
-    background: color-mix(in srgb, var(--struck-bg) 55%, transparent);
-  }
-
-  .notes-input {
-    width: 100%;
-    height: var(--density-notes-height);
-    padding: 0 var(--space-4) var(--space-4);
-    background: transparent;
-    border: none;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    color: var(--ink);
-    resize: none;
-    outline: none;
-  }
-
-  .notes-input::placeholder {
-    color: var(--ink-ghost);
-  }
-
-  .lint-panel {
-    border-top: var(--border-subtle);
-    padding: var(--space-3) var(--space-4) var(--space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    background: color-mix(in srgb, var(--paper-matte) 60%, transparent);
-  }
-
-  .lint-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-  }
-
-  .lint-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-faded);
-    border-radius: var(--radius-sm);
-    padding: 2px 4px;
-  }
-
-  .lint-toggle input[type='checkbox'] {
-    accent-color: var(--accent);
-  }
-
-  .lint-count {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    color: var(--ink-ghost);
-  }
-
-  .lint-muted-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-faded);
-  }
-
-  .lint-clear {
-    border: 1px solid var(--paper-edge);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--ink-faded);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    padding: 2px 8px;
-    cursor: pointer;
-  }
-
-  .lint-clear:hover {
-    color: var(--ink);
-    border-color: var(--ink-ghost);
-  }
-
-  .lint-empty {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-  }
-
-  .lint-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    max-height: 220px;
-    overflow-y: auto;
-    padding-right: 2px;
-  }
-
-  .lint-item {
-    border: 1px solid var(--paper-edge);
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
-    padding: var(--space-2) var(--space-3);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .lint-item-top {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .lint-label {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink);
-    font-weight: 500;
-  }
-
-  .lint-line {
-    margin-left: auto;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    color: var(--ink-ghost);
-  }
-
-  .lint-why,
-  .lint-snippet,
-  .lint-suggestion {
-    margin: 0;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    line-height: 1.35;
-    color: var(--ink-faded);
-  }
-
-  .lint-snippet {
-    color: var(--ink);
-    font-style: italic;
-  }
-
-  .lint-ignore {
+    gap: 2px;
     align-self: flex-start;
-    border: 1px solid var(--paper-edge);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--ink-faded);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    padding: 2px 8px;
-    cursor: pointer;
-    margin-top: 2px;
+    margin-bottom: var(--space-3);
+    padding: 2px;
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 92%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--paper-matte) 72%, transparent);
   }
 
-  .lint-ignore:hover {
+  .mode-option {
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    padding: 0.35rem 0.7rem;
+    font-family: var(--font-ui);
+    font-size: var(--text-ui-small);
+    color: var(--ink-faded);
+    cursor: pointer;
+  }
+
+  .mode-option.active {
     color: var(--ink);
-    border-color: var(--ink-ghost);
+    background: var(--paper-bright);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .reference-drawer-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(25, 20, 15, 0.18);
+    z-index: 140;
+  }
+
+  .reference-drawer {
+    position: fixed;
+    top: var(--header-height);
+    right: var(--desk-padding-x);
+    bottom: calc(var(--status-bar-height) + var(--space-3));
+    width: min(24rem, calc(100vw - 2rem));
+    z-index: 150;
+  }
+
+  .reference-drawer :global(.reference-pane) {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+  }
+
+  @media (max-width: 1180px) {
+    .desk {
+      gap: var(--space-7);
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .desk,
+    .app.density-review .desk {
+      padding-top: var(--space-7);
+      padding-left: var(--space-4);
+      padding-right: var(--space-4);
+    }
   }
 
   @media (max-width: 920px) {

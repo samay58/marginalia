@@ -14,16 +14,34 @@ const diffPluginKey = new PluginKey('marginalia-diff');
  */
 
 /**
+ * Create a deletion widget that stays visually present in the manuscript without
+ * becoming part of the editable text flow.
+ * @param {Change} change
+ * @param {boolean} selected
+ */
+function createDeletionWidget(change, selected = false) {
+  const span = document.createElement('span');
+  span.className = selected ? 'struck selected' : 'struck';
+  span.setAttribute('contenteditable', 'false');
+  span.dataset.changeId = change.id;
+  span.dataset.changeText = change.text;
+  span.dataset.changeType = 'deletion';
+  span.textContent = change.text;
+  return span;
+}
+
+/**
  * Create decorations from diff result
  * Verifies current doc text matches the diffed text to prevent misaligned ranges.
- * Deletions are intentionally not rendered inline to avoid cursor/selection traps.
  */
 /**
  * @param {import('@milkdown/prose/model').Node} doc
  * @param {TextMap} textMap
  * @param {DiffResult | null} diffResult
+ * @param {string | null} selectedChangeId
+ * @param {ChangeClickHandler | null} onClickChange
  */
-function createDiffDecorations(doc, textMap, diffResult) {
+function createDiffDecorations(doc, textMap, diffResult, selectedChangeId, onClickChange) {
   if (!diffResult || !diffResult.changes || diffResult.changes.length === 0) {
     return DecorationSet.empty;
   }
@@ -59,7 +77,15 @@ function createDiffDecorations(doc, textMap, diffResult) {
       continue;
     }
 
-    if (change.type === 'insertion') {
+    if (change.type === 'deletion') {
+      decorations.push(
+        Decoration.widget(docPos, () => createDeletionWidget(change, selectedChangeId === change.id), {
+          side: -1,
+          key: change.id,
+          ignoreSelection: true,
+        })
+      );
+    } else if (change.type === 'insertion') {
       // Inline decoration - highlights the inserted text
       // Use an exclusive end offset so we highlight the full insertion.
       // offsets[endOffset] maps to the position *after* the last inserted char.
@@ -79,7 +105,7 @@ function createDiffDecorations(doc, textMap, diffResult) {
       if (endPos !== null && endPos > docPos) {
         decorations.push(
           Decoration.inline(docPos, endPos, {
-            class: 'added',
+            class: selectedChangeId === change.id ? 'added selected' : 'added',
             'data-change-id': change.id,
             'data-change-text': change.text,
             'data-change-type': 'insertion',
@@ -101,8 +127,9 @@ let currentClickHandler = null;
 /**
  * @param {() => DiffResult | null} getDiffResult
  * @param {ChangeClickHandler} onClickChange
+ * @param {() => string | null} [getSelectedChangeId]
  */
-export function createDiffPlugin(getDiffResult, onClickChange) {
+export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChangeId = () => null) {
   currentClickHandler = onClickChange;
 
   return $prose((ctx) => {
@@ -113,7 +140,7 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
         init(_, state) {
           const diffResult = getDiffResult();
           const textMap = buildTextMap(state.doc);
-          return createDiffDecorations(state.doc, textMap, diffResult);
+          return createDiffDecorations(state.doc, textMap, diffResult, getSelectedChangeId(), currentClickHandler);
         },
 
         apply(tr, oldDecorations, oldState, newState) {
@@ -126,7 +153,7 @@ export function createDiffPlugin(getDiffResult, onClickChange) {
               return DecorationSet.empty;
             }
             const textMap = buildTextMap(newState.doc);
-            return createDiffDecorations(newState.doc, textMap, diffResult);
+            return createDiffDecorations(newState.doc, textMap, diffResult, getSelectedChangeId(), currentClickHandler);
           }
           return oldDecorations.map(tr.mapping, tr.doc);
         },

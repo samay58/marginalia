@@ -8,16 +8,25 @@
   import { historyKeymapPlugin, historyPlugin } from '../utils/milkdown-history-plugin.js';
   import { createSlopPlugin, triggerSlopUpdate } from '../utils/milkdown-slop-plugin.js';
   import { buildTextMap } from '../utils/prosemirror-text.js';
+  import { summarizeText } from '../utils/text.js';
 
-  /** @type {{ content?: string, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
+  /** @typedef {{ id: string, top: number, height: number, index: number, type: 'deletion' | 'insertion' | 'slop', selected: boolean, annotated: boolean, preview: string, changeIds: string[] }} AnchorMark */
+
+  /** @type {{ content?: string, diffResult?: any, annotations?: Map<string, import('../stores/app.js').Annotation>, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (changeId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
   let {
     content = '',
+    diffResult = null,
+    annotations = new Map(),
+    slopLines = new Set(),
+    selectedChangeId = null,
+    densityMode = 'manuscript',
     onChange = () => {},
     onPlainTextChange = () => {},
     onInitialRender = () => {},
     onLineChange = () => {},
     getDiffResult = () => null,
     onClickChange = () => {},
+    onSelectAnchor = () => {},
     onScroll = () => {},
     getSlopMatchers = () => [],
     onRuntimeError = () => {},
@@ -32,60 +41,190 @@
     onRuntimeError(code, detail);
   }
 
-  /** @type {HTMLDivElement} */
-  let editorContainer;
+  /** @type {HTMLDivElement | null} */
+  let editorRoot = $state(null);
+  /** @type {HTMLDivElement | null} */
+  let editorShell = $state(null);
+  /** @type {HTMLDivElement | null} */
+  let editorFrame = $state(null);
 
   /** @type {Editor | null} */
   let editor = $state(null);
+  /** @type {AnchorMark[]} */
+  let anchorMarks = $state([]);
   let isReady = $state(false);
   let isInternalUpdate = false;
   let lastKnownContent = '';
   let hasCalledInitialRender = false;
   /** @type {ReturnType<typeof setTimeout> | null} */
   let diffUpdateTimeout = null;
-  const DIFF_DEBOUNCE_MS = 150; // Wait for typing pause before updating decorations
+  /** @type {ResizeObserver | null} */
+  let resizeObserver = null;
+  let anchorRefreshHandle = 0;
+  const DIFF_DEBOUNCE_MS = 150;
 
-  /**
-   * Get current plain text from editor
-   */
-  function getCurrentPlainText() {
-    if (!editor || !isReady) return '';
+  function getEditorView() {
+    if (!editor || !isReady) return null;
     try {
-      const view = editor.ctx.get(editorViewCtx);
-      if (view) {
-        return buildTextMap(view.state.doc).text;
-      }
-    } catch (e) {
-      console.error('Failed to extract plain text:', e);
-      reportRuntimeError('editor_plain_text_extract_failed', e);
+      return editor.ctx.get(editorViewCtx);
+    } catch (error) {
+      reportRuntimeError('editor_view_unavailable', error);
+      return null;
     }
-    return '';
   }
 
-  /** @param {string} initialContent */
+  function getCurrentPlainText() {
+    const view = getEditorView();
+    if (!view) return '';
+    try {
+      return buildTextMap(view.state.doc).text;
+    } catch (error) {
+      reportRuntimeError('editor_plain_text_extract_failed', error);
+      return '';
+    }
+  }
+
+  function queueAnchorRefresh() {
+    if (typeof window === 'undefined') return;
+    if (anchorRefreshHandle) {
+      window.cancelAnimationFrame(anchorRefreshHandle);
+    }
+    anchorRefreshHandle = window.requestAnimationFrame(() => {
+      anchorRefreshHandle = 0;
+      refreshAnchors();
+    });
+  }
+
+  /**
+   * @param {number} pos
+   * @param {import('@milkdown/prose/view').EditorView} view
+   */
+  function resolveBlockElement(pos, view) {
+    const boundedPos = Math.max(1, Math.min(pos, view.state.doc.content.size));
+    const resolved = view.domAtPos(boundedPos);
+    const element =
+      resolved.node instanceof Text
+        ? resolved.node.parentElement
+        : resolved.node instanceof HTMLElement
+          ? resolved.node
+          : null;
+
+    if (!(element instanceof HTMLElement)) {
+      return null;
+    }
+
+    return element.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, hr');
+  }
+
+  /** @param {string} text */
+  function summarize(text) {
+    return summarizeText(text, 28);
+  }
+
+  function refreshAnchors() {
+    const view = getEditorView();
+    if (!view || !editorShell || !editorFrame || !diffResult?.changes?.length) {
+      anchorMarks = [];
+      return;
+    }
+
+    try {
+      const textMap = buildTextMap(view.state.doc);
+      if (diffResult?._editedText && textMap.text !== diffResult._editedText) {
+        anchorMarks = [];
+        return;
+      }
+
+      /** @type {Map<string, AnchorMark & { sortOffset: number }>} */
+      const groups = new Map();
+      const frameRect = editorFrame.getBoundingClientRect();
+      const offsets = textMap.offsets;
+      const sortedChanges = [...diffResult.changes].sort((left, right) => left.editedOffset - right.editedOffset);
+
+      for (const [index, change] of sortedChanges.entries()) {
+        const offsetIndex = Math.max(0, Math.min(change.editedOffset, offsets.length - 1));
+        const docPos = offsets[offsetIndex];
+        if (typeof docPos !== 'number') continue;
+
+        const blockEl = resolveBlockElement(docPos, view);
+        if (!(blockEl instanceof HTMLElement)) continue;
+
+        const rect = blockEl.getBoundingClientRect();
+        const top = rect.top - frameRect.top + editorShell.scrollTop;
+        const height = Math.max(20, Math.min(rect.height, 96));
+        const key = `${Math.round(top)}:${Math.round(height)}`;
+        const existing = groups.get(key);
+        const annotated = annotations.has(change.id);
+        const flagged = slopLines.has(change.location.line);
+        const markType = flagged ? 'slop' : change.type;
+
+        if (existing) {
+          existing.changeIds.push(change.id);
+          existing.annotated = existing.annotated || annotated;
+          existing.selected = existing.selected || selectedChangeId === change.id;
+          if (existing.type !== 'slop' && markType === 'slop') {
+            existing.type = 'slop';
+          }
+          if (selectedChangeId === change.id) {
+            existing.id = change.id;
+            existing.preview = summarize(change.text);
+          }
+          continue;
+        }
+
+        groups.set(key, {
+          id: change.id,
+          top,
+          height,
+          index: index + 1,
+          type: markType,
+          selected: selectedChangeId === change.id,
+          annotated,
+          preview: summarize(change.text),
+          changeIds: [change.id],
+          sortOffset: change.editedOffset,
+        });
+      }
+
+      anchorMarks = [...groups.values()]
+        .sort((left, right) => left.sortOffset - right.sortOffset)
+        .map(({ sortOffset, ...mark }) => mark);
+    } catch (error) {
+      reportRuntimeError('editor_anchor_refresh_failed', error);
+      anchorMarks = [];
+    }
+  }
+
+  function setupObservers() {
+    if (typeof ResizeObserver === 'undefined') return;
+    resizeObserver = new ResizeObserver(() => {
+      queueAnchorRefresh();
+    });
+    if (editorFrame) resizeObserver.observe(editorFrame);
+    if (editorShell) resizeObserver.observe(editorShell);
+  }
+
+  /**
+   * @param {string} initialContent
+   */
   async function initEditor(initialContent) {
-    if (!editorContainer) return;
+    if (!editorRoot) return;
 
     try {
       editor = await Editor.make()
         .config((ctx) => {
-          ctx.set(rootCtx, editorContainer);
+          ctx.set(rootCtx, editorRoot);
           ctx.set(defaultValueCtx, initialContent || '');
 
-          // Set up listener for content changes (user edits)
           const listenerManager = ctx.get(listenerCtx);
-          listenerManager.markdownUpdated((ctx, markdown, prevMarkdown) => {
-            // Only propagate changes from user edits, not programmatic updates
+          listenerManager.markdownUpdated((ctx, markdown) => {
             if (!isInternalUpdate && markdown !== lastKnownContent) {
               lastKnownContent = markdown;
               onChange(markdown);
 
-              // Also send plain text for accurate diffing
               const plainText = getCurrentPlainText();
               onPlainTextChange(plainText);
 
-              // Debounce diff decoration updates to reduce visual jumpiness
-              // Wait for user to pause typing before recalculating decorations
               if (diffUpdateTimeout) {
                 clearTimeout(diffUpdateTimeout);
               }
@@ -93,8 +232,9 @@
                 if (editor) {
                   try {
                     triggerDiffUpdate(editor);
-                  } catch (e) {
-                    reportRuntimeError('editor_diff_refresh_failed', e);
+                    queueAnchorRefresh();
+                  } catch (error) {
+                    reportRuntimeError('editor_diff_refresh_failed', error);
                   }
                 }
               }, DIFF_DEBOUNCE_MS);
@@ -105,14 +245,14 @@
         .use(historyPlugin)
         .use(historyKeymapPlugin)
         .use(listener)
-        .use(createDiffPlugin(getDiffResult, onClickChange))
+        .use(createDiffPlugin(getDiffResult, onClickChange, () => selectedChangeId))
         .use(createSlopPlugin(getSlopMatchers))
         .create();
 
       isReady = true;
       lastKnownContent = initialContent;
+      setupObservers();
 
-      // Extract initial plain text and notify parent
       setTimeout(() => {
         if (!hasCalledInitialRender) {
           const plainText = getCurrentPlainText();
@@ -120,36 +260,32 @@
             hasCalledInitialRender = true;
             onInitialRender(plainText);
           }
+          queueAnchorRefresh();
         }
       }, 50);
 
-      // Track cursor position for line number updates
-      editorContainer.addEventListener('click', updateLineNumber);
-      editorContainer.addEventListener('keyup', updateLineNumber);
-    } catch (e) {
-      console.error('Failed to initialize Milkdown:', e);
-      reportRuntimeError('editor_init_failed', e);
+      editorRoot.addEventListener('click', updateLineNumber, { passive: true });
+      editorRoot.addEventListener('keyup', updateLineNumber, { passive: true });
+    } catch (error) {
+      reportRuntimeError('editor_init_failed', error);
     }
   }
 
   function updateLineNumber() {
-    if (!editor || !isReady) return;
+    const view = getEditorView();
+    if (!view) return;
     try {
-      const view = editor.ctx.get(editorViewCtx);
-      if (view) {
-        const pos = view.state.selection.anchor;
-        const doc = view.state.doc;
-        let line = 1;
-        doc.descendants((node, nodePos) => {
-          if (nodePos >= pos) return false;
-          if (node.isTextblock) line++;
-          return true;
-        });
-        onLineChange(Math.max(1, line));
-      }
-    } catch (e) {
-      // Ignore errors during initialization
-      reportRuntimeError('editor_line_tracking_failed', e);
+      const pos = view.state.selection.anchor;
+      const doc = view.state.doc;
+      let line = 1;
+      doc.descendants((node, nodePos) => {
+        if (nodePos >= pos) return false;
+        if (node.isTextblock) line++;
+        return true;
+      });
+      onLineChange(Math.max(1, line));
+    } catch (error) {
+      reportRuntimeError('editor_line_tracking_failed', error);
     }
   }
 
@@ -174,7 +310,6 @@
   }
 
   onMount(() => {
-    // Initialize with content if available, otherwise wait for content prop
     if (content) {
       initEditor(content);
     }
@@ -184,81 +319,86 @@
     if (diffUpdateTimeout) {
       clearTimeout(diffUpdateTimeout);
     }
-    if (editorContainer) {
-      editorContainer.removeEventListener('click', updateLineNumber);
-      editorContainer.removeEventListener('keyup', updateLineNumber);
+    if (anchorRefreshHandle && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(anchorRefreshHandle);
     }
-    if (editor) {
-      editor.destroy();
+    resizeObserver?.disconnect();
+    if (editorRoot) {
+      editorRoot.removeEventListener('click', updateLineNumber);
+      editorRoot.removeEventListener('keyup', updateLineNumber);
     }
+    editor?.destroy();
   });
 
-  // React to content prop changes
   $effect(() => {
     const currentContent = content;
 
     if (!currentContent) return;
 
-    // First time content arrives and editor not initialized yet
-    if (!isReady && currentContent && editorContainer) {
+    if (!isReady && currentContent && editorRoot) {
       initEditor(currentContent);
       return;
     }
 
-    // Content changed externally after initialization
-    // Only update if it's actually different from what we have
     if (isReady && editor && currentContent !== lastKnownContent) {
       try {
         isInternalUpdate = true;
         editor.action(milkdownUtils.replaceAll(currentContent));
         lastKnownContent = currentContent;
-        // Use setTimeout to ensure flag is cleared after async Milkdown updates
         setTimeout(() => {
           isInternalUpdate = false;
-          // Trigger diff update after content sync
           if (editor) {
             triggerDiffUpdate(editor);
+            queueAnchorRefresh();
           }
         }, 0);
-      } catch (e) {
-        console.error('Failed to update editor content:', e);
-        reportRuntimeError('editor_external_sync_failed', e);
+      } catch (error) {
+        reportRuntimeError('editor_external_sync_failed', error);
         isInternalUpdate = false;
       }
     }
   });
 
+  $effect(() => {
+    diffResult;
+    selectedChangeId;
+    annotations;
+    slopLines;
+    densityMode;
+    if (isReady) {
+      try {
+        if (editor) {
+          triggerDiffUpdate(editor);
+        }
+      } catch (error) {
+        reportRuntimeError('editor_diff_refresh_failed', error);
+      }
+      queueAnchorRefresh();
+    }
+  });
 
-  // Export method to get current content
   export function getContent() {
     if (!editor || !isReady) return '';
     try {
       return editor.action(milkdownUtils.getMarkdown());
-    } catch (e) {
-      reportRuntimeError('editor_markdown_read_failed', e);
+    } catch (error) {
+      reportRuntimeError('editor_markdown_read_failed', error);
       return '';
     }
   }
 
-  // Export method to focus editor
   export function focus() {
-    if (!editor || !isReady) return;
-    try {
-      const view = editor.ctx.get(editorViewCtx);
-      view?.focus();
-    } catch (e) {
-      reportRuntimeError('editor_focus_failed', e);
-    }
+    const view = getEditorView();
+    view?.focus();
   }
 
-  // Export method to refresh diff decorations
   export function refreshDiff() {
     if (!editor || !isReady) return;
     try {
       triggerDiffUpdate(editor);
-    } catch (e) {
-      console.error('Failed to refresh diff:', e);
-      reportRuntimeError('editor_diff_refresh_failed', e);
+      queueAnchorRefresh();
+    } catch (error) {
+      reportRuntimeError('editor_diff_refresh_failed', error);
     }
   }
 
@@ -266,193 +406,407 @@
     if (!editor || !isReady) return;
     try {
       triggerSlopUpdate(editor);
-    } catch (e) {
-      console.error('Failed to refresh slop:', e);
-      reportRuntimeError('editor_slop_refresh_failed', e);
+      queueAnchorRefresh();
+    } catch (error) {
+      reportRuntimeError('editor_slop_refresh_failed', error);
     }
   }
 
   /** @param {number} scrollTop */
   export function setScrollTop(scrollTop) {
-    if (!editorContainer) return;
-    if (Math.abs(editorContainer.scrollTop - scrollTop) < 1) return;
-    editorContainer.scrollTop = scrollTop;
+    if (!editorShell) return;
+    if (Math.abs(editorShell.scrollTop - scrollTop) < 1) return;
+    editorShell.scrollTop = scrollTop;
   }
 
   /** @param {number} lineNumber */
   export function scrollToLine(lineNumber) {
-    if (!editorContainer) return;
-    const lineHeight = getLineHeightPx() || 27;
+    if (!editorShell) return;
+    const lineHeight = getLineHeightPx() || 28;
     const targetTop = Math.max(0, Math.round((lineNumber - 1) * lineHeight));
-    editorContainer.scrollTo({ top: targetTop, behavior: 'auto' });
+    editorShell.scrollTo({ top: targetTop, behavior: 'auto' });
+  }
+
+  /** @param {string} changeId */
+  export function scrollToChange(changeId) {
+    if (!editorShell || !changeId) return;
+    const mark = anchorMarks.find((item) => item.changeIds.includes(changeId) || item.id === changeId);
+    if (mark) {
+      editorShell.scrollTo({
+        top: Math.max(0, Math.round(mark.top - 96)),
+        behavior: 'auto',
+      });
+      return;
+    }
+    const change = diffResult?.changes?.find(
+      /** @param {import('../utils/diff.js').Change} item */
+      (item) => item.id === changeId
+    );
+    if (change) {
+      scrollToLine(change.location.line);
+    }
+  }
+
+  /**
+   * @param {AnchorMark} mark
+   * @param {MouseEvent} event
+   */
+  function handleAnchorClick(mark, event) {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return;
+    const rect = target.getBoundingClientRect();
+    onSelectAnchor(mark.id, rect.right + 8, rect.top);
   }
 </script>
 
-<div class="editor-wrapper" bind:this={editorContainer} onscroll={handleScroll}></div>
+<div
+  class="editor-shell"
+  class:density-review={densityMode === 'review'}
+  class:density-manuscript={densityMode === 'manuscript'}
+  bind:this={editorShell}
+  onscroll={handleScroll}
+>
+  <div class="editor-frame" bind:this={editorFrame}>
+    <div class="anchor-layer" aria-hidden="true">
+      {#each anchorMarks as mark (mark.id)}
+        <div
+          class="anchor-mark"
+          style={`top:${mark.top}px;height:${mark.height}px;`}
+        >
+          <button
+            type="button"
+            class="anchor-hit control-motion control-focus"
+            class:selected={mark.selected}
+            onclick={(event) => handleAnchorClick(mark, event)}
+            aria-label={`Jump to edit ${mark.index}`}
+          >
+            <span class="anchor-line" class:deletion={mark.type === 'deletion'} class:insertion={mark.type === 'insertion'} class:slop={mark.type === 'slop'}></span>
+            {#if mark.selected || mark.annotated}
+              <span class="anchor-badge" class:slop={mark.type === 'slop'}>{mark.index}</span>
+            {/if}
+            {#if mark.selected && mark.type === 'deletion' && mark.preview}
+              <span class="anchor-ghost">{mark.preview}</span>
+            {/if}
+          </button>
+        </div>
+      {/each}
+    </div>
+
+    <div class="editor-surface">
+      <div class="editor-root" bind:this={editorRoot}></div>
+    </div>
+  </div>
+</div>
 
 <style>
-  .editor-wrapper {
+  .editor-shell {
     flex: 1;
     overflow: auto;
-    background: var(--paper);
-    padding: var(--space-4);
-    max-width: var(--content-max-width);
-    margin: 0 auto;
+    padding-bottom: var(--space-12);
   }
 
-  /* Milkdown prose styling - Paper & Ink theme */
-  .editor-wrapper :global(.milkdown) {
+  .editor-frame {
+    position: relative;
+    width: min(100%, calc(var(--content-max-width) + var(--gutter-width) + 2rem));
+    margin: 0 auto;
+    padding-top: var(--space-12);
+    padding-bottom: var(--space-12);
+  }
+
+  .editor-shell.density-review .editor-frame {
+    padding-top: var(--space-9);
+  }
+
+  .editor-surface {
+    margin-left: var(--gutter-width);
+    max-width: var(--content-max-width);
+    min-height: 100%;
+  }
+
+  .editor-root {
+    min-height: 100%;
+  }
+
+  .anchor-layer {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--gutter-width);
+  }
+
+  .anchor-mark {
+    position: absolute;
+    inset-inline: 0.35rem 0.5rem;
+  }
+
+  .anchor-hit {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .anchor-line {
+    position: absolute;
+    right: 0.5rem;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--insert-line) 88%, transparent);
+  }
+
+  .anchor-line.deletion {
+    background: color-mix(in srgb, var(--delete-line) 88%, transparent);
+  }
+
+  .anchor-line.slop {
+    background: color-mix(in srgb, var(--slop-line) 92%, transparent);
+  }
+
+  .anchor-hit.selected .anchor-line {
+    width: 4px;
+  }
+
+  .anchor-badge {
+    position: absolute;
+    right: -0.1rem;
+    top: -0.05rem;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 999px;
+    padding: 0 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--accent) 88%, var(--paper-bright));
+    color: var(--paper-bright);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
+  }
+
+  .anchor-badge.slop {
+    background: color-mix(in srgb, var(--slop-ink) 88%, var(--paper-bright));
+    color: var(--ink);
+  }
+
+  .anchor-ghost {
+    position: absolute;
+    right: 1.8rem;
+    top: -0.05rem;
+    max-width: calc(var(--gutter-width) - 2.2rem);
+    font-family: var(--font-body);
+    font-size: 0.675rem;
+    line-height: 1.2;
+    color: var(--delete-ink);
+    opacity: 0.7;
+    text-align: right;
+    text-decoration: line-through;
+  }
+
+  .editor-root :global(.milkdown) {
     font-family: var(--font-body);
     color: var(--ink);
     line-height: var(--line-height);
     outline: none;
   }
 
-  .editor-wrapper :global(.milkdown .editor) {
+  .editor-root :global(.milkdown .editor),
+  .editor-root :global(.milkdown .ProseMirror),
+  .editor-root :global(.milkdown .ProseMirror:focus) {
     outline: none;
   }
 
-  .editor-wrapper :global(.milkdown .ProseMirror) {
-    outline: none;
+  .editor-root :global(.milkdown .ProseMirror) {
     min-height: 100%;
   }
 
-  .editor-wrapper :global(.milkdown .ProseMirror:focus) {
-    outline: none;
-  }
-
-  /* Headings - Iowan Old Style for editorial feel */
-  .editor-wrapper :global(.milkdown h1) {
+  .editor-root :global(.milkdown h1) {
     font-family: var(--font-display);
     font-size: var(--text-title);
     font-weight: 600;
     color: var(--ink);
-    margin: var(--space-6) 0 var(--space-4);
-    line-height: 1.3;
+    margin: 0 0 var(--space-2);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
   }
 
-  .editor-wrapper :global(.milkdown h2) {
+  .editor-root :global(.milkdown h2) {
     font-family: var(--font-display);
     font-size: var(--text-heading);
     font-weight: 600;
     color: var(--ink);
-    margin: var(--space-6) 0 var(--space-3);
-    line-height: 1.4;
+    margin: var(--space-8) 0 var(--space-3);
+    line-height: 1.35;
   }
 
-  .editor-wrapper :global(.milkdown h3) {
+  .editor-root :global(.milkdown h3) {
     font-family: var(--font-display);
     font-size: 1.125rem;
     font-weight: 600;
     color: var(--ink);
-    margin: var(--space-4) 0 var(--space-2);
+    margin: var(--space-6) 0 var(--space-2);
   }
 
-  /* Paragraphs */
-  .editor-wrapper :global(.milkdown p) {
-    margin: var(--space-3) 0;
+  .editor-root :global(.milkdown p) {
+    margin: var(--space-5) 0;
     line-height: var(--line-height);
+    font-size: 1.125rem;
   }
 
-  /* Lists */
-  .editor-wrapper :global(.milkdown ul),
-  .editor-wrapper :global(.milkdown ol) {
-    margin: var(--space-3) 0;
-    padding-left: var(--space-6);
+  .editor-shell.density-review .editor-root :global(.milkdown p) {
+    margin: var(--space-4) 0;
+    font-size: 1.0625rem;
   }
 
-  .editor-wrapper :global(.milkdown li) {
+  .editor-root :global(.milkdown ul),
+  .editor-root :global(.milkdown ol) {
+    margin: var(--space-5) 0;
+    padding-left: var(--space-7);
+  }
+
+  .editor-root :global(.milkdown li) {
     margin: var(--space-2) 0;
   }
 
-  .editor-wrapper :global(.milkdown ul li::marker) {
+  .editor-root :global(.milkdown ul li::marker) {
     color: var(--ink-faded);
   }
 
-  /* Emphasis */
-  .editor-wrapper :global(.milkdown strong) {
+  .editor-root :global(.milkdown strong) {
     font-weight: 600;
     color: var(--ink);
   }
 
-  .editor-wrapper :global(.milkdown em) {
+  .editor-root :global(.milkdown em) {
     font-style: italic;
   }
 
-  /* Code */
-  .editor-wrapper :global(.milkdown code) {
+  .editor-root :global(.milkdown code) {
     font-family: var(--font-mono);
     font-size: 0.875em;
-    background: var(--paper-matte);
+    background: color-mix(in srgb, var(--paper-matte) 95%, transparent);
     padding: 0.125rem 0.375rem;
-    border-radius: 3px;
+    border-radius: 4px;
     color: var(--ink);
   }
 
-  .editor-wrapper :global(.milkdown pre) {
-    background: var(--paper-matte);
+  .editor-root :global(.milkdown pre) {
+    background: color-mix(in srgb, var(--paper-matte) 96%, transparent);
     padding: var(--space-4);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     overflow-x: auto;
-    margin: var(--space-4) 0;
+    margin: var(--space-6) 0;
   }
 
-  .editor-wrapper :global(.milkdown pre code) {
+  .editor-root :global(.milkdown pre code) {
     background: none;
     padding: 0;
   }
 
-  /* Blockquotes */
-  .editor-wrapper :global(.milkdown blockquote) {
+  .editor-root :global(.milkdown blockquote) {
     border-left: 3px solid var(--ink-whisper);
     padding-left: var(--space-4);
-    margin: var(--space-4) 0;
+    margin: var(--space-6) 0;
     color: var(--ink-faded);
     font-style: italic;
   }
 
-  /* Links */
-  .editor-wrapper :global(.milkdown a) {
+  .editor-root :global(.milkdown a) {
     color: var(--accent);
     text-decoration: underline;
     text-decoration-color: var(--accent-subtle);
     text-underline-offset: 2px;
   }
 
-  .editor-wrapper :global(.milkdown a:hover) {
+  .editor-root :global(.milkdown a:hover) {
     text-decoration-color: var(--accent);
   }
 
-  /* Horizontal rules */
-  .editor-wrapper :global(.milkdown hr) {
+  .editor-root :global(.milkdown hr) {
     border: none;
     border-top: 1px solid var(--paper-edge);
-    margin: var(--space-8) 0;
+    margin: var(--space-10) 0;
   }
 
-  /* Selection */
-  .editor-wrapper :global(.milkdown ::selection) {
-    background: var(--accent-subtle);
+  .editor-root :global(.milkdown ::selection) {
+    background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
   }
 
-  /* Diff decorations - these will be applied via plugin */
-  .editor-wrapper :global(.added) {
-    background-color: var(--added-bg);
-    color: var(--added-text);
+  .editor-root :global(.added) {
+    background-color: color-mix(in srgb, var(--insert-bg) 95%, transparent);
+    color: var(--insert-ink);
     padding: 1px 2px;
-    border-radius: 2px;
+    border-radius: 3px;
     cursor: pointer;
     white-space: pre-wrap;
-    transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--insert-line) 95%, transparent);
+    transition:
+      background-color var(--transition-fast),
+      color var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
-  .editor-wrapper :global(.added:hover) {
-    filter: brightness(0.95);
+  .editor-root :global(.added.selected) {
+    background-color: color-mix(in srgb, var(--insert-bg) 100%, var(--paper-bright));
+    box-shadow:
+      inset 0 -1px 0 color-mix(in srgb, var(--insert-line) 100%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--insert-line) 38%, transparent);
   }
 
-  .editor-wrapper :global(.slop-violation) {
-    background: var(--accent-subtle);
-    box-shadow: inset 0 -1px 0 var(--accent);
+  .editor-root :global(.added:hover) {
+    background-color: color-mix(in srgb, var(--insert-bg) 100%, transparent);
+  }
+
+  .editor-root :global(.struck) {
+    display: inline;
+    white-space: pre-wrap;
+    cursor: pointer;
+    user-select: none;
+    vertical-align: baseline;
+    color: var(--struck-text);
+    background: color-mix(in srgb, var(--struck-bg) 92%, transparent);
+    border-radius: 0.35rem;
+    padding: 0.03rem 0.18rem;
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--struck-line) 96%, var(--struck-text));
+    text-decoration-thickness: 1.4px;
+    text-decoration-skip-ink: none;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 24%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, var(--struck-line) 36%, transparent);
+    transition:
+      background-color var(--transition-fast),
+      box-shadow var(--transition-fast),
+      color var(--transition-fast);
+  }
+
+  .editor-root :global(.struck:hover) {
+    background: color-mix(in srgb, var(--struck-bg) 100%, transparent);
+  }
+
+  .editor-root :global(.struck.selected) {
+    background: color-mix(in srgb, var(--struck-bg) 100%, var(--paper-bright));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 48%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--struck-line) 22%, transparent);
+  }
+
+  .editor-root :global(.struck:focus-visible) {
+    outline: none;
+  }
+
+  .editor-root :global(.struck:focus-visible) {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 48%, transparent),
+      0 0 0 2px color-mix(in srgb, var(--focus-ring) 36%, transparent);
+  }
+
+  .editor-root :global(.slop-violation) {
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--slop-line) 95%, transparent);
     border-radius: 2px;
     padding: 0 1px;
   }

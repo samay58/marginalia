@@ -17,6 +17,17 @@
         }
       })();
     </script>
+    <script>
+      (function () {
+        try {
+          var path = window.location.pathname || '/';
+          var isReview = path === '/review' || path.indexOf('/review/') === 0;
+          document.documentElement.dataset.marginaliaMode = isReview ? 'review' : 'site';
+        } catch (_) {
+          // no-op
+        }
+      })();
+    </script>
     <title>Marginalia</title>
     %sveltekit.head%
   </head>

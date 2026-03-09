@@ -54,8 +54,11 @@ export const generalNotes = writable('');
 /** @type {import('svelte/store').Writable<Date>} */
 export const startTime = writable(new Date());
 
-/** @type {import('svelte/store').Writable<number | null>} */
-export const activeChangeId = writable(null);
+/** @type {import('svelte/store').Writable<string | null>} */
+export const selectedChangeId = writable(null);
+
+/** @type {import('svelte/store').Writable<'annotations' | 'reference'>} */
+export const rightPaneMode = writable('annotations');
 
 /** @type {import('svelte/store').Writable<number | null>} */
 export const currentLine = writable(1);
@@ -129,6 +132,30 @@ export const changeSummary = derived(diffResult, ($diff) => {
   return summarizeChanges($diff);
 });
 
+/** Selected change object */
+export const selectedChange = derived(
+  [diffResult, selectedChangeId],
+  ([$diff, $selectedChangeId]) => {
+    if (!$diff || !$selectedChangeId) return null;
+    return $diff.changes.find((change) => change.id === $selectedChangeId) || null;
+  }
+);
+
+/** Annotated changes in document order */
+export const annotatedChanges = derived(
+  [diffResult, annotations],
+  ([$diff, $annotations]) => {
+    if (!$diff || !$annotations || $annotations.size === 0) return [];
+    return $diff.changes
+      .map((change) => ({
+        change,
+        annotation: $annotations.get(change.id),
+      }))
+      .filter((entry) => entry.annotation)
+      .sort((left, right) => left.change.editedOffset - right.change.editedOffset);
+  }
+);
+
 /** Lines that have annotations */
 export const linesWithAnnotations = derived(
   [diffResult, annotations],
@@ -191,6 +218,8 @@ export function initializeWithContent(path, content) {
   annotations.set(new Map());
   generalNotes.set('');
   startTime.set(new Date());
+  selectedChangeId.set(null);
+  rightPaneMode.set('annotations');
 }
 
 /**
@@ -205,6 +234,8 @@ export function initializeWithContent(path, content) {
  * @param {string} [snapshot.generalNotes]
  * @param {Array<{ changeId: string, annotation: Annotation }>} [snapshot.annotations]
  * @param {string} [snapshot.startedAt]
+ * @param {string | null} [snapshot.selectedChangeId]
+ * @param {'annotations' | 'reference'} [snapshot.rightPaneMode]
  */
 export function restoreFromSnapshot(snapshot) {
   const restoredFilePath = snapshot.filePath || '';
@@ -237,6 +268,12 @@ export function restoreFromSnapshot(snapshot) {
   annotations.set(restoredAnnotations);
   generalNotes.set(snapshot.generalNotes || '');
   startTime.set(snapshot.startedAt ? new Date(snapshot.startedAt) : new Date());
+  selectedChangeId.set(
+    typeof snapshot.selectedChangeId === 'string' && snapshot.selectedChangeId.length > 0
+      ? snapshot.selectedChangeId
+      : null
+  );
+  rightPaneMode.set(snapshot.rightPaneMode === 'reference' ? 'reference' : 'annotations');
 }
 
 /**
@@ -306,6 +343,25 @@ export function updateGeneralNotes(notes) {
 }
 
 /**
+ * Select a change by stable diff ID.
+ * @param {string | null} changeId
+ */
+export function setSelectedChange(changeId) {
+  selectedChangeId.set(changeId || null);
+}
+
+export function clearSelectedChange() {
+  selectedChangeId.set(null);
+}
+
+/**
+ * @param {'annotations' | 'reference'} mode
+ */
+export function setRightPaneMode(mode) {
+  rightPaneMode.set(mode === 'reference' ? 'reference' : 'annotations');
+}
+
+/**
  * Reset the store to initial state
  */
 export function reset() {
@@ -320,6 +376,7 @@ export function reset() {
   annotations.set(new Map());
   generalNotes.set('');
   startTime.set(new Date());
-  activeChangeId.set(null);
+  selectedChangeId.set(null);
+  rightPaneMode.set('annotations');
   currentLine.set(1);
 }

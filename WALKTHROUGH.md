@@ -29,7 +29,7 @@ the UI exists only to capture edits and intent. It should not grow into a full d
 
 1. A draft file lands on disk (usually `*-draft.md` or contains `<!-- REVIEW -->`).
 2. A hook launches Marginalia as a blocking step.
-3. You edit inline, and optionally attach short rationales to specific edits.
+3. You edit inline, review a stable change index on the left, and optionally attach short rationales to specific edits in the annotation column on the right.
 4. On `Esc`, Marginalia writes a “bundle” directory and exits.
 5. The hook hands the agent `summary_for_agent.md`.
 
@@ -50,10 +50,13 @@ Files:
 - `changes.json` – a structured diff (insertions/deletions with stable IDs)
 - `annotations.json` – rationales keyed to change IDs
 - `summary_for_agent.md` – the only thing the agent needs to read
+- `changes.patch` – apply-ready patch for agents/automation
+- `provenance.json` – artifact hashes + metadata (trust/debug)
 
 Why a bundle directory instead of “just a patch”:
-- It keeps human and agent views aligned.
-- It makes downstream automation easy (attach to issues, store in a database, promote rules).
+- It preserves input vs. approved output.
+- It anchors intent (rationales) to specific edits.
+- It includes an apply-ready patch plus structured artifacts for automation.
 
 ---
 
@@ -66,7 +69,7 @@ Two kinds of feedback:
 
 Rationales are deliberately constrained. The point is to avoid a second essay about the first essay.
 
-There’s also **General Notes** (`⌘ G`) for anything that doesn’t map cleanly to a specific edit (structure, missing section, voice).
+There’s also **General Notes** (`⌘ G`) for anything that doesn’t map cleanly to a specific edit (structure, missing section, voice). In the current UI those live in a bottom session drawer, separate from change-bound rationales.
 
 ---
 
@@ -103,7 +106,7 @@ Important: the hook should be boring. Don’t bake personal folder conventions i
 - Tauri (Rust) shell
 - Svelte (frontend)
 - Milkdown / ProseMirror (markdown editor)
-- diff-match-patch (diffing)
+- diff-match-patch with token-aware plain-text segmentation (diffing)
 
 ### Data flow
 
@@ -111,12 +114,12 @@ Important: the hook should be boring. Don’t bake personal folder conventions i
 2. Frontend renders markdown and maintains:
    - original content
    - edited content
-   - plain-text projections (for stable diffing)
+   - plain-text projections (for stable, token-aware diffing)
 3. On close, frontend generates bundle files and asks Rust to write them.
 
 ### Key places to read
 
-- `src/routes/+page.svelte` – app orchestration, close handling, bundle write
+- `src/routes/review/+page.svelte` – app orchestration, close handling, bundle write
 - `src/lib/utils/diff.js` – diff computation + grouping
 - `src/lib/utils/bundle.js` – bundle file generation
 - `src-tauri/src/lib.rs` – read/write file APIs + bundle persistence
@@ -131,4 +134,3 @@ Important: the hook should be boring. Don’t bake personal folder conventions i
 
 It should stay sharp:
 capture edits + intent fast, return structured feedback to the agent, exit.
-

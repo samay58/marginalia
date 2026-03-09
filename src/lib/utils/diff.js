@@ -1,6 +1,8 @@
 import DiffMatchPatch from 'diff-match-patch';
 
 const dmp = new DiffMatchPatch();
+const TOKEN_PATTERN = /\s+|[\p{L}\p{N}][\p{L}\p{N}@._:/&+'’-]*|[^\s]/gu;
+const MAX_TOKEN_ALPHABET = 0xffff;
 
 /**
  * @typedef {Object} Change
@@ -237,6 +239,98 @@ function offsetToLocation(text, offset) {
 }
 
 /**
+ * Split text into editorially meaningful diff tokens so rewrites stay coherent.
+ * Whitespace remains explicit to preserve offsets and spacing edits.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function tokenizeForDiff(text) {
+  return text.match(TOKEN_PATTERN) || [];
+}
+
+/**
+ * Encode tokens into a compact character alphabet for diff-match-patch.
+ * Mirrors DMP's line-mode compression, but at token granularity.
+ * @param {string} text
+ * @param {Map<string, number>} tokenMap
+ * @param {string[]} tokenArray
+ * @returns {string | null}
+ */
+function encodeTokenText(text, tokenMap, tokenArray) {
+  const tokens = tokenizeForDiff(text);
+  let encoded = '';
+
+  for (const token of tokens) {
+    let code = tokenMap.get(token);
+    if (typeof code !== 'number') {
+      if (tokenArray.length >= MAX_TOKEN_ALPHABET) {
+        return null;
+      }
+      code = tokenArray.length;
+      tokenMap.set(token, code);
+      tokenArray.push(token);
+    }
+    encoded += String.fromCharCode(code);
+  }
+
+  return encoded;
+}
+
+/**
+ * Expand compressed token chars back into original token strings.
+ * @param {string} compressed
+ * @param {string[]} tokenArray
+ * @returns {string}
+ */
+function decodeTokenText(compressed, tokenArray) {
+  let text = '';
+  for (const tokenChar of compressed) {
+    text += tokenArray[tokenChar.charCodeAt(0)] || '';
+  }
+  return text;
+}
+
+/**
+ * Apply semantic cleanup to a diff op list.
+ * @param {Array<[number, string]>} diffs
+ */
+function cleanupDiffs(diffs) {
+  dmp.diff_cleanupSemantic(diffs);
+  dmp.diff_cleanupSemanticLossless(diffs);
+}
+
+/**
+ * Compute a UI-facing diff with token compression when possible, falling back
+ * to raw character diffing if the token alphabet would overflow.
+ * @param {string} original
+ * @param {string} edited
+ * @returns {Array<[number, string]>}
+ */
+function computeTextDiffs(original, edited) {
+  const tokenArray = [''];
+  const tokenMap = new Map();
+  const encodedOriginal = encodeTokenText(original, tokenMap, tokenArray);
+  const encodedEdited = encodeTokenText(edited, tokenMap, tokenArray);
+
+  if (encodedOriginal !== null && encodedEdited !== null) {
+    /** @type {Array<[number, string]>} */
+    const tokenDiffs = /** @type {Array<[number, string]>} */ (
+      dmp.diff_main(encodedOriginal, encodedEdited, false)
+    );
+    cleanupDiffs(tokenDiffs);
+    return tokenDiffs.map(([operation, compressed]) => [
+      operation,
+      decodeTokenText(compressed, tokenArray),
+    ]);
+  }
+
+  /** @type {Array<[number, string]>} */
+  const rawDiffs = /** @type {Array<[number, string]>} */ (dmp.diff_main(original, edited));
+  cleanupDiffs(rawDiffs);
+  return rawDiffs;
+}
+
+/**
  * Compute the diff between original and edited text
  * @param {string} original - The original text
  * @param {string} edited - The edited text
@@ -245,12 +339,8 @@ function offsetToLocation(text, offset) {
  * @returns {DiffResult}
  */
 export function computeDiff(original, edited, previousChanges = [], previousEditedText = '') {
-  // Compute the diff
   /** @type {Array<[number, string]>} */
-  const diffs = /** @type {Array<[number, string]>} */ (dmp.diff_main(original, edited));
-
-  // Cleanup for better semantics (combines adjacent changes)
-  dmp.diff_cleanupSemantic(diffs);
+  const diffs = computeTextDiffs(original, edited);
 
   /** @type {Change[]} */
   const changes = [];

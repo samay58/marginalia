@@ -1,8 +1,9 @@
 <script>
-  /** @type {{ filename?: string, hasChanges?: boolean, densityMode?: 'review' | 'manuscript', onSetDensity?: (mode: 'review' | 'manuscript') => void, onDone?: () => void }} */
+  /** @type {{ filename?: string, hasChanges?: boolean, editCount?: number, densityMode?: 'review' | 'manuscript', onSetDensity?: (mode: 'review' | 'manuscript') => void, onDone?: () => void }} */
   let {
     filename = 'Untitled',
     hasChanges = false,
+    editCount = 0,
     densityMode = 'manuscript',
     onSetDensity = () => {},
     onDone = () => {}
@@ -16,8 +17,10 @@
 
   <div class="filename" data-tauri-drag-region>
     <span class="filename-text">{filename}</span>
-    {#if hasChanges}
-      <span class="modified-indicator" title="Unsaved changes">●</span>
+    {#if editCount > 0}
+      <span class="edit-count">{editCount} edit{editCount === 1 ? '' : 's'}</span>
+    {:else if hasChanges}
+      <span class="modified-indicator" title="Unsaved changes">Unsaved</span>
     {/if}
   </div>
 
@@ -51,9 +54,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 var(--space-4);
+    padding: 0 var(--desk-padding-x);
     background: transparent;
-    border-bottom: var(--border-subtle);
+    border-bottom: 1px solid color-mix(in srgb, var(--chrome-border) 95%, transparent);
     position: relative;
     z-index: 100;
   }
@@ -75,14 +78,21 @@
 
   .filename-text {
     font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    color: var(--ink);
+    font-size: 0.8125rem;
+    color: var(--ink-ghost);
     font-weight: 500;
+    letter-spacing: 0.01em;
   }
 
+  .edit-count,
   .modified-indicator {
-    color: var(--accent);
-    font-size: 10px;
+    font-family: var(--font-ui);
+    font-size: 0.6875rem;
+    line-height: 1;
+    color: var(--delete-ink);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
 
   .header-actions {
@@ -96,14 +106,14 @@
     align-items: center;
     gap: 2px;
     padding: 2px;
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--paper-matte) 70%, transparent);
-    border: 1px solid var(--paper-edge);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--paper-matte) 76%, transparent);
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 92%, transparent);
   }
 
   .density-option {
     border: none;
-    border-radius: calc(var(--radius-md) - 2px);
+    border-radius: 999px;
     background: transparent;
     color: var(--ink-faded);
     font-family: var(--font-ui);
@@ -119,7 +129,7 @@
   .density-option.active {
     background: var(--paper-bright);
     color: var(--ink);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 
   .hint {
@@ -127,9 +137,9 @@
     font-size: var(--text-ui-small);
     color: var(--ink-ghost);
     padding: var(--space-1) var(--space-2);
-    background: var(--paper);
-    border-radius: var(--radius-sm);
-    border: var(--border-subtle);
+    background: color-mix(in srgb, var(--paper-matte) 92%, transparent);
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 92%, transparent);
   }
 
   .done-button {
@@ -139,8 +149,8 @@
     color: var(--paper-bright);
     background: var(--accent);
     border: none;
-    border-radius: var(--radius-md);
-    padding: var(--space-1) var(--space-4);
+    border-radius: 999px;
+    padding: 0.45rem 0.95rem;
     cursor: pointer;
     transition: background var(--transition-fast);
   }

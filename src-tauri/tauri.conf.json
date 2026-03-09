@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "Marginalia",
-        "width": 900,
-        "height": 700,
-        "minWidth": 600,
-        "minHeight": 400,
+        "url": "review",
+        "width": 1280,
+        "height": 900,
+        "minWidth": 1040,
+        "minHeight": 720,
         "center": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,

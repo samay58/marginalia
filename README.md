@@ -12,7 +12,9 @@ The core idea is not “build a better editor.” It’s “make feedback fricti
 ## What it does
 
 - Opens a markdown file in a native macOS window.
-- You edit inline and optionally attach a short rationale to a change (`⌘ /`), or leave session-level notes (`⌘ G`).
+- You edit inline inside a three-part review desk: change index, manuscript, and annotations.
+- Diffing is computed from the rendered plain text with token-aware segmentation, so visible edits read like editorial rewrites instead of raw character shards.
+- You can attach a short rationale to a change (`⌘ /`) or leave session-level notes (`⌘ G`).
 - Switch between `Review` and `Manuscript` density modes to optimize for fast scanning vs comfortable reading.
 - Tone lint is explainable and configurable: toggle it on/off and ignore noisy rules for the current session.
 - Close with `Esc` / `⌘ Enter`.
@@ -152,6 +154,10 @@ pnpm tauri dev   # development
 pnpm tauri build # production app bundle
 pnpm tauri:build:dmg # DMG (requires GUI)
 ```
+
+Notes:
+- `pnpm dev` serves the marketing site at `/`. The review UI is at `/review` and requires Tauri APIs.
+- `pnpm tauri dev` opens the desktop app (it loads `/review`).
 
 Output: `src-tauri/target/release/bundle/macos/Marginalia.app`
 

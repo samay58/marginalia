@@ -4,6 +4,10 @@ All notable changes to Marginalia.
 
 ## [Unreleased]
 
+### Added
+- Marketing site at `/` (review UI moved to `/review`)
+- Bundle v2 artifacts: `changes.patch`, `provenance.json`
+
 ## [0.1.2] - 2026-01-26
 
 ### Changed

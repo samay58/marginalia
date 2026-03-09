@@ -7,29 +7,44 @@
   /* -------------------------------------------------------------------------
      PAPER - Warm, off-white. Not sterile.
      ------------------------------------------------------------------------- */
-  --paper: #FAF9F7;
-  --paper-matte: #F5F4F0;
+  --canvas-paper: #F7F3EE;
+  --paper: #F7F3EE;
+  --paper-matte: #F2ECE4;
   --paper-bright: #FFFFFF;
-  --paper-edge: #E8E6E1;
+  --paper-edge: #E5DDD2;
+  --chrome-veil: rgba(255, 255, 255, 0.45);
+  --chrome-border: rgba(255, 255, 255, 0.55);
+  --status-bg: rgba(255, 255, 255, 0.35);
 
   /* -------------------------------------------------------------------------
      INK - Deep, warm blacks. Not pure #000.
      ------------------------------------------------------------------------- */
   --ink: #2C2825;
-  --ink-faded: #6B655D;
-  --ink-ghost: #A39E94;
+  --ink-faded: #6B6560;
+  --ink-ghost: #8C857B;
   --ink-whisper: #C7C2B8;
+  --annotation-ink: #5C5549;
+  --annotation-muted: #9C958C;
 
   /* -------------------------------------------------------------------------
      REVISION MARKS
      Struck = muted brick (old correction marks)
      Added = deep verdigris (editorial insertions)
      ------------------------------------------------------------------------- */
-  --struck-bg: #F5E6E1;
-  --struck-text: #8B4D3B;
-  --struck-line: #C4796A;
-  --added-bg: #E5F0ED;
-  --added-text: #2D5F52;
+  --delete-ink: #A0523D;
+  --delete-bg: rgba(160, 82, 61, 0.1);
+  --delete-line: rgba(160, 82, 61, 0.42);
+  --insert-ink: #3D7A68;
+  --insert-bg: rgba(61, 122, 104, 0.1);
+  --insert-line: rgba(61, 122, 104, 0.28);
+  --slop-ink: #D4A843;
+  --slop-bg: rgba(212, 168, 67, 0.1);
+  --slop-line: rgba(212, 168, 67, 0.42);
+  --struck-bg: var(--delete-bg);
+  --struck-text: var(--delete-ink);
+  --struck-line: var(--delete-line);
+  --added-bg: var(--insert-bg);
+  --added-text: var(--insert-ink);
 
   /* -------------------------------------------------------------------------
      ACCENT - Amber for indicators and actions
@@ -53,9 +68,13 @@
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
+  --space-5: 1.25rem;
   --space-6: 1.5rem;
+  --space-7: 1.75rem;
   --space-8: 2rem;
+  --space-9: 2.25rem;
   --space-10: 2.5rem;
+  --space-12: 3rem;
 
   /* -------------------------------------------------------------------------
      TYPE SCALE
@@ -65,6 +84,8 @@
   --text-body: 1rem;
   --text-ui: 0.8125rem;
   --text-ui-small: 0.75rem;
+  --text-status: 0.75rem;
+  --text-annotation: 0.875rem;
 
   /* -------------------------------------------------------------------------
      EDITOR METRICS
@@ -72,7 +93,14 @@
   --line-height: 1.6875rem;
   --gutter-width: 3.5rem;
   --content-max-width: 42rem;
-  --header-height: 3rem;
+  --header-height: 52px;
+  --status-bar-height: 40px;
+  --desk-breakpoint-full: 1180px;
+  --desk-padding-x: 28px;
+  --desk-gap: 32px;
+  --desk-annotation-gap: 48px;
+  --desk-rail-width: 240px;
+  --desk-right-width: 304px;
 
   /* -------------------------------------------------------------------------
      BORDERS & RADII
@@ -80,6 +108,7 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  --radius-xl: 10px;
   --border-subtle: 1px solid var(--paper-edge);
 
   /* -------------------------------------------------------------------------
@@ -88,13 +117,14 @@
   --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.06);
   --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.08);
   --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.12);
+  --shadow-note: 0 2px 12px rgba(0, 0, 0, 0.08);
 
   /* -------------------------------------------------------------------------
      GLASS
      ------------------------------------------------------------------------- */
-  --glass-bg: rgba(250, 249, 247, 0.72);
-  --glass-bg-static: rgba(250, 249, 247, 0.9);
-  --glass-border: rgba(232, 230, 225, 0.7);
+  --glass-bg: var(--chrome-veil);
+  --glass-bg-static: rgba(247, 243, 238, 0.88);
+  --glass-border: var(--chrome-border);
   --glass-blur-focal: 16px;
   --glass-blur-ambient: 8px;
 
@@ -125,21 +155,36 @@
    ============================================================================= */
 
 :root.dark {
+  --canvas-paper: #1B1815;
   --paper: #1C1A18;
-  --paper-matte: #242220;
+  --paper-matte: #24201C;
   --paper-bright: #2E2B28;
   --paper-edge: #3D3935;
+  --chrome-veil: rgba(44, 38, 33, 0.68);
+  --chrome-border: rgba(255, 255, 255, 0.08);
+  --status-bg: rgba(44, 38, 33, 0.72);
 
   --ink: #EBE8E4;
   --ink-faded: #A8A29A;
-  --ink-ghost: #706B63;
+  --ink-ghost: #B4A796;
   --ink-whisper: #4A463F;
+  --annotation-ink: #E3D6C8;
+  --annotation-muted: #B4A796;
 
-  --struck-bg: #3D2A25;
-  --struck-text: #E8A090;
-  --struck-line: #C4796A;
-  --added-bg: #1F3530;
-  --added-text: #8FCEBE;
+  --delete-ink: #D08B74;
+  --delete-bg: rgba(208, 139, 116, 0.14);
+  --delete-line: rgba(208, 139, 116, 0.46);
+  --insert-ink: #8FC1B1;
+  --insert-bg: rgba(143, 193, 177, 0.14);
+  --insert-line: rgba(143, 193, 177, 0.32);
+  --slop-ink: #E0B85F;
+  --slop-bg: rgba(224, 184, 95, 0.14);
+  --slop-line: rgba(224, 184, 95, 0.46);
+  --struck-bg: var(--delete-bg);
+  --struck-text: var(--delete-ink);
+  --struck-line: var(--delete-line);
+  --added-bg: var(--insert-bg);
+  --added-text: var(--insert-ink);
 
   --accent: #DBA044;
   --accent-subtle: rgba(219, 160, 68, 0.15);
@@ -148,10 +193,11 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-note: 0 2px 12px rgba(0, 0, 0, 0.24);
 
-  --glass-bg: rgba(28, 26, 24, 0.7);
+  --glass-bg: var(--chrome-veil);
   --glass-bg-static: rgba(28, 26, 24, 0.88);
-  --glass-border: rgba(61, 57, 53, 0.65);
+  --glass-border: var(--chrome-border);
   --glass-blur-focal: 14px;
   --glass-blur-ambient: 7px;
 }
@@ -175,12 +221,12 @@ html {
   text-rendering: optimizeLegibility;
 }
 
-body {
+:root[data-marginalia-mode='review'] body {
   font-family: var(--font-ui);
   font-size: var(--text-body);
   line-height: 1.5;
   color: var(--ink);
-  background-color: var(--paper);
+  background-color: var(--canvas-paper);
   overflow: hidden;
 }
 

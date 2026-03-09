@@ -2,7 +2,8 @@
  * @param {import('@milkdown/prose/model').Node} doc
  */
 export function buildTextMap(doc) {
-  let text = '';
+  /** @type {string[]} */
+  const parts = [];
   const offsets = [];
 
   doc.descendants(
@@ -10,12 +11,12 @@ export function buildTextMap(doc) {
     (node, pos) => {
     if (node.isText && node.text) {
       for (let i = 0; i < node.text.length; i++) {
-        text += node.text[i];
+        parts.push(node.text[i]);
         offsets.push(pos + i);
       }
     } else if (node.isTextblock) {
-      if (text.length > 0 && !text.endsWith('\n')) {
-        text += '\n';
+      if (parts.length > 0 && parts[parts.length - 1] !== '\n') {
+        parts.push('\n');
         offsets.push(pos + 1);
       }
     }
@@ -23,9 +24,7 @@ export function buildTextMap(doc) {
     }
   );
 
-  // Add sentinel for end-of-document position lookups
-  // This allows offsetToPos(text.length) to return the correct end position
   offsets.push(doc.content.size);
 
-  return { text, offsets, docSize: doc.content.size };
+  return { text: parts.join(''), offsets, docSize: doc.content.size };
 }

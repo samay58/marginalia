@@ -37,7 +37,8 @@ Status: **shipped** (tracked across `marg-z5h`, `marg-lxi`, `marg-ee2`, `marg-s3
 
 #### A1. Stable change interaction model
 - Replaced line-gutter centric flow with a stable change rail (`src/lib/components/ChangeRail.svelte`).
-- Removed inline deletion widgets from editable flow to avoid cursor/selection corruption (`src/lib/utils/milkdown-diff-plugin.js`).
+- Restored inline struck deletion widgets as non-editable, click-safe manuscript affordances while keeping them outside the editable text flow (`src/lib/utils/milkdown-diff-plugin.js`).
+- Shifted plain-text diff segmentation to token-aware editorial units so manuscript and rail changes reflect coherent rewrites instead of raw character shards (`src/lib/utils/diff.js`).
 - Preserved change IDs across routine offset shifts via reconciliation logic (`src/lib/utils/diff.js`).
 - Strengthened ID retention for repeated similar edits via context-aware reconciliation scoring against prior edited snapshots (`src/lib/utils/diff.js`, `src/lib/stores/app.js`).
 
@@ -47,9 +48,9 @@ Status: **shipped** (tracked across `marg-z5h`, `marg-lxi`, `marg-ee2`, `marg-s3
 - Bundles now emit `semantic_changes` and include semantic summaries in `summary_for_agent.md` (`src/lib/utils/bundle.js`).
 
 #### A3. Safe close, autosave, recovery, degraded mode
-- Restored normal macOS close behavior with intercepted finalize-on-close flow (`src/routes/+page.svelte`, `src-tauri/tauri.conf.json`).
-- Added session autosave snapshots and resume/discard recovery path (`src/routes/+page.svelte`, `src/lib/stores/app.js`).
-- Added degraded mode fallback so bundle output still completes when highlight/diff subsystems fail (`src/routes/+page.svelte`, `src/lib/components/Editor.svelte`).
+- Restored normal macOS close behavior with intercepted finalize-on-close flow (`src/routes/review/+page.svelte`, `src-tauri/tauri.conf.json`).
+- Added session autosave snapshots and resume/discard recovery path (`src/routes/review/+page.svelte`, `src/lib/stores/app.js`).
+- Added degraded mode fallback so bundle output still completes when highlight/diff subsystems fail (`src/routes/review/+page.svelte`, `src/lib/components/Editor.svelte`).
 
 ### WS-B: Bundle Contract v2 (Tier 3 Data Reliability)
 
