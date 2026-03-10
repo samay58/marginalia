@@ -10,13 +10,14 @@
   import { buildTextMap } from '../utils/prosemirror-text.js';
   import { summarizeText } from '../utils/text.js';
 
-  /** @typedef {{ id: string, top: number, height: number, index: number, type: 'deletion' | 'insertion' | 'slop', selected: boolean, annotated: boolean, preview: string, changeIds: string[] }} AnchorMark */
+  /** @typedef {{ annotationId: string, changeId: string, displayIndex: number, top: number, selected: boolean, preview: string }} AnchorMark */
 
-  /** @type {{ content?: string, diffResult?: any, annotations?: Map<string, import('../stores/app.js').Annotation>, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (changeId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
+  /** @type {{ content?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
   let {
     content = '',
     diffResult = null,
-    annotations = new Map(),
+    annotationEntries = [],
+    selectedAnnotationId = null,
     slopLines = new Set(),
     selectedChangeId = null,
     densityMode = 'manuscript',
@@ -99,7 +100,7 @@
    * @param {number} pos
    * @param {import('@milkdown/prose/view').EditorView} view
    */
-  function resolveBlockElement(pos, view) {
+  function resolveBlockAnchor(pos, view) {
     const boundedPos = Math.max(1, Math.min(pos, view.state.doc.content.size));
     const resolved = view.domAtPos(boundedPos);
     const element =
@@ -113,7 +114,24 @@
       return null;
     }
 
-    return element.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, hr');
+    const blockElement = element.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, hr');
+    if (!(blockElement instanceof HTMLElement)) {
+      return null;
+    }
+
+    const resolvedPos = view.state.doc.resolve(boundedPos);
+    let blockStart = boundedPos;
+    for (let depth = resolvedPos.depth; depth >= 0; depth--) {
+      const node = resolvedPos.node(depth);
+      if (!node?.isTextblock) continue;
+      blockStart = resolvedPos.start(depth);
+      break;
+    }
+
+    return {
+      blockElement,
+      blockKey: `pm:${blockStart}`,
+    };
   }
 
   /** @param {string} text */
@@ -123,7 +141,7 @@
 
   function refreshAnchors() {
     const view = getEditorView();
-    if (!view || !editorShell || !editorFrame || !diffResult?.changes?.length) {
+    if (!view || !editorShell || !editorFrame || !annotationEntries?.length) {
       anchorMarks = [];
       return;
     }
@@ -135,60 +153,54 @@
         return;
       }
 
-      /** @type {Map<string, AnchorMark & { sortOffset: number }>} */
+      /** @type {Map<string, { top: number, marks: AnchorMark[] }>} */
       const groups = new Map();
       const frameRect = editorFrame.getBoundingClientRect();
       const offsets = textMap.offsets;
-      const sortedChanges = [...diffResult.changes].sort((left, right) => left.editedOffset - right.editedOffset);
+      const activeEntries = [...annotationEntries]
+        .filter((entry) => entry.status === 'active' && entry.change)
+        .sort((left, right) => left.change.editedOffset - right.change.editedOffset);
 
-      for (const [index, change] of sortedChanges.entries()) {
+      for (const entry of activeEntries) {
+        const change = entry.change;
         const offsetIndex = Math.max(0, Math.min(change.editedOffset, offsets.length - 1));
         const docPos = offsets[offsetIndex];
         if (typeof docPos !== 'number') continue;
 
-        const blockEl = resolveBlockElement(docPos, view);
-        if (!(blockEl instanceof HTMLElement)) continue;
+        const block = resolveBlockAnchor(docPos, view);
+        if (!block) continue;
 
-        const rect = blockEl.getBoundingClientRect();
+        const rect = block.blockElement.getBoundingClientRect();
         const top = rect.top - frameRect.top + editorShell.scrollTop;
-        const height = Math.max(20, Math.min(rect.height, 96));
-        const key = `${Math.round(top)}:${Math.round(height)}`;
-        const existing = groups.get(key);
-        const annotated = annotations.has(change.id);
-        const flagged = slopLines.has(change.location.line);
-        const markType = flagged ? 'slop' : change.type;
+        const existing = groups.get(block.blockKey);
+        const mark = {
+          annotationId: entry.annotation.id,
+          changeId: change.id,
+          displayIndex: entry.displayIndex,
+          top,
+          selected: selectedAnnotationId === entry.annotation.id,
+          preview: summarize(change.text),
+        };
 
         if (existing) {
-          existing.changeIds.push(change.id);
-          existing.annotated = existing.annotated || annotated;
-          existing.selected = existing.selected || selectedChangeId === change.id;
-          if (existing.type !== 'slop' && markType === 'slop') {
-            existing.type = 'slop';
-          }
-          if (selectedChangeId === change.id) {
-            existing.id = change.id;
-            existing.preview = summarize(change.text);
-          }
+          existing.marks.push(mark);
           continue;
         }
 
-        groups.set(key, {
-          id: change.id,
+        groups.set(block.blockKey, {
           top,
-          height,
-          index: index + 1,
-          type: markType,
-          selected: selectedChangeId === change.id,
-          annotated,
-          preview: summarize(change.text),
-          changeIds: [change.id],
-          sortOffset: change.editedOffset,
+          marks: [mark],
         });
       }
 
       anchorMarks = [...groups.values()]
-        .sort((left, right) => left.sortOffset - right.sortOffset)
-        .map(({ sortOffset, ...mark }) => mark);
+        .sort((left, right) => left.top - right.top)
+        .flatMap((group) =>
+          group.marks.map((mark, index) => ({
+            ...mark,
+            top: group.top + index * 18,
+          }))
+        );
     } catch (error) {
       reportRuntimeError('editor_anchor_refresh_failed', error);
       anchorMarks = [];
@@ -362,7 +374,6 @@
   $effect(() => {
     diffResult;
     selectedChangeId;
-    annotations;
     slopLines;
     densityMode;
     if (isReady) {
@@ -373,6 +384,14 @@
       } catch (error) {
         reportRuntimeError('editor_diff_refresh_failed', error);
       }
+      queueAnchorRefresh();
+    }
+  });
+
+  $effect(() => {
+    annotationEntries;
+    selectedAnnotationId;
+    if (isReady) {
       queueAnchorRefresh();
     }
   });
@@ -430,7 +449,7 @@
   /** @param {string} changeId */
   export function scrollToChange(changeId) {
     if (!editorShell || !changeId) return;
-    const mark = anchorMarks.find((item) => item.changeIds.includes(changeId) || item.id === changeId);
+    const mark = anchorMarks.find((item) => item.changeId === changeId);
     if (mark) {
       editorShell.scrollTo({
         top: Math.max(0, Math.round(mark.top - 96)),
@@ -455,7 +474,7 @@
     const target = event.currentTarget;
     if (!(target instanceof HTMLElement)) return;
     const rect = target.getBoundingClientRect();
-    onSelectAnchor(mark.id, rect.right + 8, rect.top);
+    onSelectAnchor(mark.annotationId, rect.right + 8, rect.top);
   }
 </script>
 
@@ -468,23 +487,21 @@
 >
   <div class="editor-frame" bind:this={editorFrame}>
     <div class="anchor-layer" aria-hidden="true">
-      {#each anchorMarks as mark (mark.id)}
+      {#each anchorMarks as mark (mark.annotationId)}
         <div
           class="anchor-mark"
-          style={`top:${mark.top}px;height:${mark.height}px;`}
+          style={`top:${mark.top}px;`}
         >
           <button
             type="button"
             class="anchor-hit control-motion control-focus"
             class:selected={mark.selected}
             onclick={(event) => handleAnchorClick(mark, event)}
-            aria-label={`Jump to edit ${mark.index}`}
+            aria-label={`Jump to note ${mark.displayIndex}`}
           >
-            <span class="anchor-line" class:deletion={mark.type === 'deletion'} class:insertion={mark.type === 'insertion'} class:slop={mark.type === 'slop'}></span>
-            {#if mark.selected || mark.annotated}
-              <span class="anchor-badge" class:slop={mark.type === 'slop'}>{mark.index}</span>
-            {/if}
-            {#if mark.selected && mark.type === 'deletion' && mark.preview}
+            <span class="anchor-line"></span>
+            <span class="anchor-badge">{mark.displayIndex}</span>
+            {#if mark.selected && mark.preview}
               <span class="anchor-ghost">{mark.preview}</span>
             {/if}
           </button>
@@ -536,6 +553,7 @@
   .anchor-mark {
     position: absolute;
     inset-inline: 0.35rem 0.5rem;
+    height: 1.1rem;
   }
 
   .anchor-hit {
@@ -553,17 +571,9 @@
     right: 0.5rem;
     top: 0;
     width: 3px;
-    height: 100%;
+    height: 1.1rem;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--insert-line) 88%, transparent);
-  }
-
-  .anchor-line.deletion {
-    background: color-mix(in srgb, var(--delete-line) 88%, transparent);
-  }
-
-  .anchor-line.slop {
-    background: color-mix(in srgb, var(--slop-line) 92%, transparent);
+    background: color-mix(in srgb, var(--accent) 78%, transparent);
   }
 
   .anchor-hit.selected .anchor-line {
@@ -588,11 +598,6 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
   }
 
-  .anchor-badge.slop {
-    background: color-mix(in srgb, var(--slop-ink) 88%, var(--paper-bright));
-    color: var(--ink);
-  }
-
   .anchor-ghost {
     position: absolute;
     right: 1.8rem;
@@ -604,7 +609,6 @@
     color: var(--delete-ink);
     opacity: 0.7;
     text-align: right;
-    text-decoration: line-through;
   }
 
   .editor-root :global(.milkdown) {

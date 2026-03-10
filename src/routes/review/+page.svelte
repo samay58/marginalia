@@ -24,7 +24,8 @@
     diffResult,
     currentLine,
     annotations,
-    annotatedChanges,
+    annotationEntries,
+    annotatedChangeIds,
     slopMatchers,
     startTime,
     initializeWithContent,
@@ -32,7 +33,8 @@
     updateContent,
     updateGeneralNotes,
     setSlopMatchers,
-    setAnnotation,
+    addAnnotation,
+    updateAnnotation,
     removeAnnotation,
     setOriginalPlainText,
     originalPlainText,
@@ -40,12 +42,13 @@
     editedPlainText,
     selectedChangeId,
     selectedChange,
-    rightPaneMode,
+    selectedAnnotation,
+    visibleChanges,
     setSelectedChange,
     clearSelectedChange,
-    setRightPaneMode,
   } from '$lib/stores/app.js';
   import { generateBundle } from '$lib/utils/bundle.js';
+  import { createAnnotationRecord, reanchorAnnotation } from '$lib/utils/annotations.js';
   import { computeDiff } from '$lib/utils/diff.js';
   import { computeSemanticChanges } from '$lib/utils/semantic-diff.js';
 
@@ -58,13 +61,16 @@
   let popoverY = $state(0);
   let popoverChangeId = $state('');
   let popoverText = $state('');
-  let popoverRationale = $state('');
-  let popoverCategory = $state('');
+  let popoverDraft = $state('');
+  let popoverAnnotationId = $state('');
   let isDark = $state(false);
   /** @type {any} */
   let editorRef = $state(null);
   /** @type {any} */
   let annotationColumnRef = $state(null);
+  let selectedAnnotationId = $state(/** @type {string | null} */ (null));
+  let composerOpen = $state(false);
+  let composerDraft = $state('');
   /** @type {Array<{ path: string, name: string, content: string }>} */
   let referenceFiles = $state([]);
   let activeReferenceIndex = $state(0);
@@ -111,7 +117,7 @@
   /** @type {null | { sessionId: string, snapshotPath: string, activeStatePath: string, snapshot: any, filePath: string, updatedAt: string | null }} */
   let recoveryCandidate = $state(null);
 
-  const SNAPSHOT_VERSION = 1;
+  const SNAPSHOT_VERSION = 2;
   const AUTOSAVE_DEBOUNCE_MS = 900;
   const REF_STORAGE_KEY = 'marginalia.references';
   const DENSITY_STORAGE_KEY = 'marginalia.density';
@@ -124,9 +130,15 @@
   );
 
   const mutedLintCount = $derived.by(() => mutedLintRuleIds.size);
-  const editCount = $derived.by(() => $diffResult?.changes?.length ?? 0);
+  const editCount = $derived.by(() => $visibleChanges?.length ?? 0);
   const slopLines = $derived.by(() => new Set(liveLintFindings.map((finding) => finding.line)));
   const statusAutosaveLabel = $derived.by(() => getAutosaveLabel());
+  const selectedAnnotationEntry = $derived.by(() => {
+    if (selectedAnnotationId) {
+      return $annotationEntries.find((entry) => entry.annotation.id === selectedAnnotationId) || null;
+    }
+    return $selectedAnnotation || null;
+  });
 
   /**
    * @param {import('$lib/utils/lint.js').LintMatcher} matcher
@@ -289,17 +301,46 @@
     }
   }
 
+  function clearPopoverState() {
+    popoverVisible = false;
+    popoverChangeId = '';
+    popoverText = '';
+    popoverDraft = '';
+    popoverAnnotationId = '';
+  }
+
+  function getPendingAnnotationSnapshot() {
+    if (composerOpen) {
+      return {
+        surface: 'column',
+        change_id: $selectedChangeId || selectedAnnotationEntry?.change?.id || null,
+        annotation_id: selectedAnnotationId || selectedAnnotationEntry?.annotation.id || null,
+        text: $selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || '',
+        draft: composerDraft,
+      };
+    }
+
+    if (popoverVisible && popoverChangeId) {
+      return {
+        surface: 'popover',
+        change_id: popoverChangeId,
+        annotation_id: popoverAnnotationId || null,
+        text: popoverText,
+        draft: popoverDraft,
+      };
+    }
+
+    return null;
+  }
+
   /**
    * @param {string} reason
    */
   async function persistSnapshot(reason) {
     if (!snapshotPath || !sessionId || !hasInitialDocument || isHydratingSnapshot) return;
     autosaveState = 'saving';
-    const serializedAnnotations = Array.from($annotations.entries()).map(([changeId, annotation]) => ({
-      changeId,
-      annotation,
-    }));
     try {
+      const pendingAnnotation = getPendingAnnotationSnapshot();
       await writeJsonFile(snapshotPath, {
         version: SNAPSHOT_VERSION,
         session_id: sessionId,
@@ -313,9 +354,10 @@
         original_plain_text: $originalPlainText,
         edited_plain_text: $editedPlainText,
         general_notes: $generalNotes,
-        annotations: serializedAnnotations,
+        annotations: $annotations,
         selected_change_id: $selectedChangeId,
-        right_pane_mode: $rightPaneMode,
+        selected_annotation_id: selectedAnnotationId,
+        pending_annotation: pendingAnnotation,
         session_drawer_open: notesExpanded,
         degraded_mode: degradedMode,
         degraded_reasons: [...degradedReasons],
@@ -422,8 +464,11 @@
     degradedReasons = [];
     notesExpanded = false;
     referenceDrawerOpen = false;
+    composerOpen = false;
+    composerDraft = '';
+    selectedAnnotationId = null;
+    clearPopoverState();
     clearSelectedChange();
-    setRightPaneMode('annotations');
     const content = await invoke('read_file', { path });
     initializeWithContent(path, content);
     hasInitialDocument = true;
@@ -564,9 +609,20 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   function updateLayoutMode() {
     if (typeof window === 'undefined') return;
-    compactLayout = window.innerWidth < 1180;
+    const nextCompactLayout = window.innerWidth < 1180;
+    const leavingCompactLayout = compactLayout && !nextCompactLayout;
+    compactLayout = nextCompactLayout;
     if (!compactLayout) {
       referenceDrawerOpen = false;
+      if (leavingCompactLayout && popoverVisible) {
+        if (popoverDraft.trim() || popoverAnnotationId) {
+          composerOpen = true;
+          composerDraft = popoverDraft;
+          selectedAnnotationId = popoverAnnotationId || selectedAnnotationId;
+          setSelectedChange(popoverChangeId || $selectedChangeId);
+        }
+        clearPopoverState();
+      }
     }
   }
 
@@ -577,15 +633,45 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     $generalNotes;
     $annotations;
     $selectedChangeId;
-    $rightPaneMode;
+    selectedAnnotationId;
     notesExpanded;
+    composerOpen;
+    composerDraft;
+    popoverVisible;
+    popoverChangeId;
+    popoverDraft;
+    popoverAnnotationId;
     if (!sessionId || !snapshotPath || !hasInitialDocument || isHydratingSnapshot) return;
     scheduleAutosave('content-change');
   });
 
   $effect(() => {
     if ($selectedChangeId && !$selectedChange) {
-      clearSelectedChange();
+      if (!selectedAnnotationEntry || selectedAnnotationEntry.status !== 'stale') {
+        clearSelectedChange();
+      }
+    }
+  });
+
+  $effect(() => {
+    $annotationEntries;
+    $selectedChange;
+    composerOpen;
+    if (composerOpen) return;
+
+    if ($selectedChange) {
+      const activeMatch = $annotationEntries.find(
+        (entry) => entry.status === 'active' && entry.change?.id === $selectedChange.id
+      );
+      selectedAnnotationId = activeMatch?.annotation.id || null;
+      return;
+    }
+
+    if (selectedAnnotationId) {
+      const existing = $annotationEntries.find((entry) => entry.annotation.id === selectedAnnotationId);
+      if (!existing || existing.status === 'active') {
+        selectedAnnotationId = null;
+      }
     }
   });
 
@@ -768,11 +854,37 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       annotations: snapshot.annotations || [],
       startedAt: snapshot.started_at || null,
       selectedChangeId: snapshot.selected_change_id || null,
-      rightPaneMode: snapshot.right_pane_mode || 'annotations',
     });
 
+    selectedAnnotationId =
+      typeof snapshot.selected_annotation_id === 'string' && snapshot.selected_annotation_id.length > 0
+        ? snapshot.selected_annotation_id
+        : null;
+    composerOpen = false;
+    composerDraft = '';
     notesExpanded = snapshot.session_drawer_open === true;
     referenceDrawerOpen = false;
+    clearPopoverState();
+
+    const pendingAnnotation = snapshot.pending_annotation;
+    if (pendingAnnotation && typeof pendingAnnotation.draft === 'string' && pendingAnnotation.draft.length > 0) {
+      if (typeof pendingAnnotation.annotation_id === 'string' && pendingAnnotation.annotation_id.length > 0) {
+        selectedAnnotationId = pendingAnnotation.annotation_id;
+      }
+      if (typeof pendingAnnotation.change_id === 'string' && pendingAnnotation.change_id.length > 0) {
+        setSelectedChange(pendingAnnotation.change_id);
+      }
+      if (compactLayout && pendingAnnotation.surface === 'popover' && pendingAnnotation.change_id) {
+        popoverChangeId = pendingAnnotation.change_id;
+        popoverText = pendingAnnotation.text || '';
+        popoverDraft = pendingAnnotation.draft;
+        popoverAnnotationId = pendingAnnotation.annotation_id || '';
+        popoverVisible = true;
+      } else {
+        composerOpen = true;
+        composerDraft = pendingAnnotation.draft;
+      }
+    }
 
     hasInitialDocument = true;
     sessionId = recoveryCandidate.sessionId || createSessionId();
@@ -825,7 +937,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     await persistSnapshot('done-invoked');
     const changesMade = $hasChanges;
     const hasNotes = typeof $generalNotes === 'string' && $generalNotes.trim().length > 0;
-    const hasAnnotations = $annotations instanceof Map && $annotations.size > 0;
+    const hasAnnotations = Array.isArray($annotations) && $annotations.length > 0;
     const feedbackProvided = changesMade || hasNotes || hasAnnotations;
 
     // No feedback case - write status and close
@@ -888,7 +1000,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       editedContent: $editedContent,
       diffResult: diffForBundle,
       semanticChanges,
-      annotations: $annotations,
+      annotations: $annotationEntries,
       generalNotes: mergedGeneralNotes,
       startTime: $startTime,
       principlesPath: cliPrinciplesPath || null,
@@ -1024,11 +1136,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       if (!picked) return;
     }
 
-    if (compactLayout) {
-      referenceDrawerOpen = !referenceDrawerOpen;
-    } else {
-      setRightPaneMode($rightPaneMode === 'reference' ? 'annotations' : 'reference');
-    }
+    referenceDrawerOpen = !referenceDrawerOpen;
   }
 
   function focusAnnotationComposer() {
@@ -1037,15 +1145,27 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     });
   }
 
+  function closeComposer() {
+    composerOpen = false;
+    composerDraft = '';
+  }
+
   /**
    * @param {import('$lib/utils/diff.js').Change | null} change
-   * @param {{ x?: number, y?: number, focusAnnotation?: boolean, openPopover?: boolean }} [options]
+   * @param {{ x?: number, y?: number, openPopover?: boolean }} [options]
    */
   function selectChange(change, options = {}) {
     if (!change) return;
 
-    const { x = NaN, y = NaN, focusAnnotation = false, openPopover = compactLayout } = options;
+    const { x = NaN, y = NaN, openPopover = compactLayout } = options;
+    if (composerOpen && $selectedChangeId && $selectedChangeId !== change.id) {
+      closeComposer();
+    }
     setSelectedChange(change.id);
+    const existing = $annotationEntries.find(
+      (entry) => entry.status === 'active' && entry.change?.id === change.id
+    );
+    selectedAnnotationId = existing?.annotation.id || null;
     editorRef?.scrollToChange?.(change.id);
 
     if (compactLayout) {
@@ -1055,11 +1175,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       return;
     }
 
+    clearPopoverState();
     referenceDrawerOpen = false;
-    setRightPaneMode('annotations');
-    if (focusAnnotation) {
-      focusAnnotationComposer();
-    }
   }
 
   /**
@@ -1069,7 +1186,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
    */
   function openChangePopover(change, x = NaN, y = NaN) {
     if (!change) return;
-    const existingAnnotation = $annotations.get(change.id);
+    const existingAnnotation = $annotationEntries.find(
+      (entry) => entry.status === 'active' && entry.change?.id === change.id
+    );
 
     if (typeof x === 'number' && Number.isFinite(x) && typeof y === 'number' && Number.isFinite(y)) {
       positionPopoverAt(x, y);
@@ -1079,8 +1198,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     popoverChangeId = change.id;
     popoverText = change.text;
-    popoverRationale = existingAnnotation?.rationale || '';
-    popoverCategory = existingAnnotation?.category || '';
+    popoverDraft = existingAnnotation?.annotation.rationale || '';
+    popoverAnnotationId = existingAnnotation?.annotation.id || '';
     popoverVisible = true;
   }
 
@@ -1089,10 +1208,10 @@ Open a lightweight review surface directly from the CLI session, capture edits +
    * @returns {import('$lib/utils/diff.js').Change | null}
    */
   function findNearestChange(line) {
-    if (!$diffResult || $diffResult.changes.length === 0) return null;
+    if (!$visibleChanges || $visibleChanges.length === 0) return null;
     let nearest = null;
     let bestDistance = Number.POSITIVE_INFINITY;
-    for (const change of $diffResult.changes) {
+    for (const change of $visibleChanges) {
       const distance = Math.abs((change.location?.line ?? 1) - line);
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -1105,7 +1224,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   function handleAnnotationShortcut() {
     const nearest = findNearestChange($currentLine ?? 1);
     if (!nearest) return;
-    selectChange(nearest, { focusAnnotation: true, openPopover: compactLayout });
+    selectChange(nearest, { openPopover: compactLayout });
+    if (compactLayout) return;
+    handleStartCompose();
   }
 
   /**
@@ -1120,14 +1241,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   /** @param {string} changeId @param {string} text @param {number} x @param {number} y */
   function handleEditorChangeClick(changeId, text, x, y) {
-    const change = $diffResult?.changes.find((item) => item.id === changeId) || null;
+    const change = $visibleChanges?.find((item) => item.id === changeId) || null;
     if (change) {
-      selectChange(change, {
-        x,
-        y,
-        focusAnnotation: !compactLayout,
-        openPopover: compactLayout,
-      });
+      selectChange(change, { x, y, openPopover: compactLayout });
       return;
     }
     // Fallback for stale click payloads.
@@ -1146,11 +1262,16 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     }
   }
 
-  /** @param {string} changeId @param {number} x @param {number} y */
-  function handleAnchorSelect(changeId, x, y) {
-    const change = $diffResult?.changes.find((item) => item.id === changeId) || null;
-    if (!change) return;
-    selectChange(change, { x, y, openPopover: compactLayout });
+  /** @param {string} annotationId @param {number} x @param {number} y */
+  function handleAnchorSelect(annotationId, x, y) {
+    const entry = $annotationEntries.find((item) => item.annotation.id === annotationId) || null;
+    if (!entry) return;
+    selectedAnnotationId = annotationId;
+    if (entry.status === 'active' && entry.change) {
+      selectChange(entry.change, { x, y, openPopover: compactLayout });
+      return;
+    }
+    clearSelectedChange();
   }
 
   /**
@@ -1158,7 +1279,114 @@ Open a lightweight review surface directly from the CLI session, capture edits +
    */
   function handleAnnotationCardSelect(change) {
     if (!change) return;
-    selectChange(change, { focusAnnotation: true, openPopover: compactLayout });
+    selectChange(change, { openPopover: compactLayout });
+  }
+
+  /**
+   * @param {string} annotationId
+   */
+  function handleAnnotationListSelect(annotationId) {
+    const entry = $annotationEntries.find((item) => item.annotation.id === annotationId) || null;
+    if (!entry) return;
+
+    selectedAnnotationId = annotationId;
+    closeComposer();
+
+    if (entry.status === 'active' && entry.change) {
+      selectChange(entry.change, { openPopover: compactLayout });
+      return;
+    }
+
+    clearSelectedChange();
+    referenceDrawerOpen = false;
+  }
+
+  function handleStartCompose() {
+    const activeChange = $selectedChange || selectedAnnotationEntry?.change || null;
+    if (!activeChange && !selectedAnnotationEntry) return;
+
+    composerOpen = true;
+    composerDraft = selectedAnnotationEntry?.annotation.rationale || '';
+
+    if (activeChange) {
+      selectedAnnotationId =
+        selectedAnnotationEntry?.annotation.id ||
+        $annotationEntries.find(
+          (entry) => entry.status === 'active' && entry.change?.id === activeChange.id
+        )?.annotation.id ||
+        null;
+    }
+
+    if (!compactLayout) {
+      focusAnnotationComposer();
+    }
+  }
+
+  /** @param {string} value */
+  function handleComposeDraftInput(value) {
+    composerDraft = value;
+  }
+
+  function handleCancelCompose() {
+    closeComposer();
+  }
+
+  function handleSaveCompose() {
+    const rationale = composerDraft.trim();
+    if (!rationale) return;
+
+    const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
+    const currentChange = $selectedChange || selectedAnnotationEntry?.change || null;
+
+    if (selectedAnnotationEntry) {
+      const patch = {
+        rationale,
+        matchedRule,
+        updatedAt: new Date().toISOString(),
+      };
+      updateAnnotation(selectedAnnotationEntry.annotation.id, patch);
+      selectedAnnotationId = selectedAnnotationEntry.annotation.id;
+      closeComposer();
+      return;
+    }
+
+    if (!currentChange) return;
+
+    const annotation = createAnnotationRecord({
+      change: currentChange,
+      editedText: $editedPlainText || $editedContent || '',
+      rationale,
+      matchedRule,
+    });
+    addAnnotation(annotation);
+    selectedAnnotationId = annotation.id;
+    closeComposer();
+  }
+
+  function handleRemoveSelected() {
+    const annotationId = selectedAnnotationEntry?.annotation.id || popoverAnnotationId || null;
+    if (!annotationId) return;
+    removeAnnotation(annotationId);
+    if (selectedAnnotationId === annotationId) {
+      selectedAnnotationId = null;
+    }
+    if (popoverAnnotationId === annotationId) {
+      popoverAnnotationId = '';
+      popoverDraft = '';
+      popoverVisible = false;
+    }
+    closeComposer();
+  }
+
+  function handleReattachSelected() {
+    if (!selectedAnnotationEntry || !$selectedChange) return;
+    const next = reanchorAnnotation(
+      selectedAnnotationEntry.annotation,
+      $selectedChange,
+      $editedPlainText || $editedContent || ''
+    );
+    updateAnnotation(selectedAnnotationEntry.annotation.id, next);
+    selectedAnnotationId = next.id;
   }
 
   /** @param {Event & { currentTarget: HTMLTextAreaElement }} event */
@@ -1194,30 +1422,56 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     enterDegradedMode(code, detail);
   }
 
-  /** @param {{ changeId: string, rationale: string, category?: string }} data */
+  /** @param {{ changeId: string, rationale: string }} data */
   function handlePopoverSave(data) {
-    const { changeId, rationale, category } = data;
+    const { changeId, rationale } = data;
     const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
     setSelectedChange(changeId);
-    setAnnotation(changeId, {
-      changeIds: [changeId],
-      rationale,
-      category,
-      writingMdRule: matchedRule,
-      principleCandidate: false,
-    });
-    popoverVisible = false;
+    const existing = popoverAnnotationId
+      ? $annotationEntries.find((entry) => entry.annotation.id === popoverAnnotationId) || null
+      : null;
+    const change = $visibleChanges.find((entry) => entry.id === changeId) || null;
+
+    if (existing) {
+      updateAnnotation(existing.annotation.id, {
+        rationale,
+        matchedRule,
+        updatedAt: new Date().toISOString(),
+      });
+      selectedAnnotationId = existing.annotation.id;
+    } else if (change) {
+      const annotation = createAnnotationRecord({
+        change,
+        editedText: $editedPlainText || $editedContent || '',
+        rationale,
+        matchedRule,
+      });
+      addAnnotation(annotation);
+      selectedAnnotationId = annotation.id;
+    }
+
+    clearPopoverState();
   }
 
   /** @param {{ changeId: string }} data */
   function handlePopoverRemove(data) {
-    const { changeId } = data;
-    removeAnnotation(changeId);
-    popoverVisible = false;
+    const entry =
+      (popoverAnnotationId &&
+        $annotationEntries.find((item) => item.annotation.id === popoverAnnotationId)) ||
+      $annotationEntries.find(
+        (item) => item.status === 'active' && item.change?.id === data.changeId
+      );
+    if (entry) {
+      removeAnnotation(entry.annotation.id);
+      if (selectedAnnotationId === entry.annotation.id) {
+        selectedAnnotationId = null;
+      }
+    }
+    clearPopoverState();
   }
 
   function handlePopoverClose() {
-    popoverVisible = false;
+    clearPopoverState();
   }
 
   function getAutosaveLabel() {
@@ -1321,8 +1575,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   <main class="desk" class:compact={compactLayout}>
     <ChangeRail
-      diffResult={$diffResult}
-      annotations={$annotations}
+      changes={$visibleChanges}
+      annotationChangeIds={$annotatedChangeIds}
+      annotationCount={$annotationEntries.length}
       slopLines={slopLines}
       selectedChangeId={$selectedChangeId}
       currentLine={$currentLine}
@@ -1334,7 +1589,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         bind:this={editorRef}
         content={$editedContent}
         diffResult={$diffResult}
-        annotations={$annotations}
+        annotationEntries={$annotationEntries}
+        selectedAnnotationId={selectedAnnotationId}
         slopLines={slopLines}
         selectedChangeId={$selectedChangeId}
         {densityMode}
@@ -1352,50 +1608,29 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     {#if !compactLayout}
       <section class="right-pane-shell">
-        <div class="right-pane-switch">
-          <button
-            type="button"
-            class="mode-option control-motion control-focus"
-            class:active={$rightPaneMode === 'annotations'}
-            onclick={() => setRightPaneMode('annotations')}
-          >
-            Annotations
-          </button>
-          <button
-            type="button"
-            class="mode-option control-motion control-focus"
-            class:active={$rightPaneMode === 'reference'}
-            onclick={toggleReferenceSurface}
-          >
-            {referenceFiles.length > 0 ? 'Reference' : 'Add Reference'}
-          </button>
-        </div>
-
-        {#if $rightPaneMode === 'reference'}
-          <ReferencePane
-            {referenceFiles}
-            {activeReferenceIndex}
-            onSelectIndex={(index) => activeReferenceIndex = index}
-            onPickReferenceFile={pickReferenceFile}
-          />
-        {:else}
-          <AnnotationColumn
-            bind:this={annotationColumnRef}
-            selectedChange={$selectedChange}
-            annotations={$annotations}
-            annotatedChanges={$annotatedChanges}
-            lintFindings={liveLintFindings}
-            {densityMode}
-            onSelectChange={handleAnnotationCardSelect}
-            onSave={handlePopoverSave}
-            onRemove={handlePopoverRemove}
-          />
-        {/if}
+        <AnnotationColumn
+          bind:this={annotationColumnRef}
+          selectedChange={$selectedChange}
+          selectedAnnotationEntry={selectedAnnotationEntry}
+          annotationEntries={$annotationEntries}
+          lintFindings={liveLintFindings}
+          {densityMode}
+          isComposing={composerOpen}
+          composerDraft={composerDraft}
+          onSelectChange={handleAnnotationCardSelect}
+          onSelectAnnotation={handleAnnotationListSelect}
+          onStartCompose={handleStartCompose}
+          onDraftInput={handleComposeDraftInput}
+          onSaveCompose={handleSaveCompose}
+          onCancelCompose={handleCancelCompose}
+          onRemoveSelected={handleRemoveSelected}
+          onReattachSelected={handleReattachSelected}
+        />
       </section>
     {/if}
   </main>
 
-  {#if compactLayout && referenceDrawerOpen}
+  {#if referenceDrawerOpen}
     <div
       class="reference-drawer-scrim"
       role="button"
@@ -1429,12 +1664,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <StatusBar
     {editCount}
     slopCount={liveLintFindings.length}
-    annotationCount={$annotations.size}
+    annotationCount={$annotationEntries.length}
     autosaveLabel={statusAutosaveLabel}
     {degradedMode}
     drawerOpen={notesExpanded}
     {compactLayout}
-    rightPaneMode={$rightPaneMode}
     hasReferences={referenceFiles.length > 0}
     onToggleDrawer={toggleSessionDrawer}
     onToggleReference={toggleReferenceSurface}
@@ -1443,11 +1677,12 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <AnnotationPopover
     changeId={popoverChangeId}
     text={popoverText}
-    currentRationale={popoverRationale}
-    currentCategory={popoverCategory}
+    draft={popoverDraft}
     x={popoverX}
     y={popoverY}
     visible={popoverVisible && compactLayout}
+    canRemove={!!popoverAnnotationId}
+    onDraftInput={(value) => (popoverDraft = value)}
     onSave={handlePopoverSave}
     onRemove={handlePopoverRemove}
     onClose={handlePopoverClose}
@@ -1687,35 +1922,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     display: flex;
     flex-direction: column;
     overflow: hidden;
-  }
-
-  .right-pane-switch {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    align-self: flex-start;
-    margin-bottom: var(--space-3);
-    padding: 2px;
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 92%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--paper-matte) 72%, transparent);
-  }
-
-  .mode-option {
-    border: none;
-    border-radius: 999px;
-    background: transparent;
-    padding: 0.35rem 0.7rem;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-faded);
-    cursor: pointer;
-  }
-
-  .mode-option.active {
-    color: var(--ink);
-    background: var(--paper-bright);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 
   .reference-drawer-scrim {

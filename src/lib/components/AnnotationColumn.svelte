@@ -2,30 +2,32 @@
   import AnnotationEditor from './AnnotationEditor.svelte';
 
   /** @typedef {import('../utils/diff.js').Change} Change */
-  /** @typedef {import('../stores/app.js').Annotation} Annotation */
 
-  /** @type {{ selectedChange?: Change | null, annotations?: Map<string, Annotation>, annotatedChanges?: Array<{ change: Change, annotation: Annotation | undefined }>, lintFindings?: Array<any>, densityMode?: 'review' | 'manuscript', onSelectChange?: (change: Change) => void, onSave?: (data: { changeId: string, rationale: string, category?: string }) => void, onRemove?: (data: { changeId: string }) => void }} */
+  /** @type {{ selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], lintFindings?: Array<any>, densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
   let {
     selectedChange = null,
-    annotations = new Map(),
-    annotatedChanges = [],
+    selectedAnnotationEntry = null,
+    annotationEntries = [],
     lintFindings = [],
     densityMode = 'manuscript',
+    isComposing = false,
+    composerDraft = '',
     onSelectChange = () => {},
-    onSave = () => {},
-    onRemove = () => {},
+    onSelectAnnotation = () => {},
+    onStartCompose = () => {},
+    onDraftInput = () => {},
+    onSaveCompose = () => {},
+    onCancelCompose = () => {},
+    onRemoveSelected = () => {},
+    onReattachSelected = () => {},
   } = $props();
 
   /** @type {AnnotationEditor | null} */
   let editorRef = $state(null);
 
-  const selectedAnnotation = $derived.by(() =>
-    selectedChange ? annotations.get(selectedChange.id) || null : null
-  );
-
   const relatedLintFindings = $derived.by(() => {
     if (!selectedChange) return [];
-    return lintFindings.filter((finding) => finding.line === selectedChange.location.line).slice(0, 3);
+    return lintFindings.filter((finding) => finding.line === selectedChange.location.line).slice(0, 2);
   });
 
   export function focusComposer() {
@@ -39,73 +41,168 @@
 >
   <header class="annotation-header">
     <div>
-      <span class="annotation-kicker">Annotations</span>
-      <h2>Why this edit matters</h2>
+      <span class="annotation-kicker">Rationales</span>
+      <h2>Capture the human reason</h2>
     </div>
   </header>
 
   <div class="annotation-scroll">
     <section class="annotation-feature">
-      {#if selectedChange}
+      {#if isComposing}
         <div class="annotation-feature-meta">
-          <span class="annotation-badge">
-            {selectedChange.type === 'deletion' ? 'Edit' : 'Edit'}
+          <span class="annotation-badge">Composing</span>
+          <span class="annotation-line">
+            {#if selectedChange}
+              L{selectedChange.location.line}
+            {:else}
+              Note draft
+            {/if}
           </span>
-          <span class="annotation-line">L{selectedChange.location.line}</span>
         </div>
 
         <AnnotationEditor
           bind:this={editorRef}
-          changeId={selectedChange.id}
-          excerpt={selectedChange.text}
-          currentRationale={selectedAnnotation?.rationale || ''}
-          currentCategory={selectedAnnotation?.category || ''}
+          excerpt={selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || ''}
+          value={composerDraft}
           autofocus={true}
-          saveLabel={selectedAnnotation ? 'Update rationale' : 'Save rationale'}
-          onSave={onSave}
-          onRemove={onRemove}
+          canRemove={!!selectedAnnotationEntry}
+          saveLabel={selectedAnnotationEntry ? 'Update rationale' : 'Save rationale'}
+          onInput={onDraftInput}
+          onSave={onSaveCompose}
+          onCancel={onCancelCompose}
+          onRemove={onRemoveSelected}
         />
+      {:else if selectedAnnotationEntry?.status === 'stale'}
+        <div class="annotation-feature-meta">
+          <span class="annotation-badge stale">Stale note</span>
+          <span class="annotation-line">Needs confirmation</span>
+        </div>
+
+        <div class="annotation-summary-card stale">
+          <p class="annotation-summary-copy">{selectedAnnotationEntry.annotation.rationale}</p>
+          {#if selectedAnnotationEntry.annotation.target.excerpt}
+            <p class="annotation-summary-meta">Last target: “{selectedAnnotationEntry.annotation.target.excerpt}”</p>
+          {/if}
+          <p class="annotation-summary-meta">
+            This note no longer maps cleanly to a single edit.
+          </p>
+        </div>
+
+        <div class="annotation-actions-row">
+          {#if selectedChange}
+            <button
+              type="button"
+              class="annotation-primary control-motion control-focus control-raise"
+              onclick={onReattachSelected}
+            >
+              Attach to selected edit
+            </button>
+          {/if}
+          <button
+            type="button"
+            class="annotation-secondary control-motion control-focus"
+            onclick={onStartCompose}
+          >
+            Edit note
+          </button>
+          <button
+            type="button"
+            class="annotation-secondary destructive control-motion control-focus"
+            onclick={onRemoveSelected}
+          >
+            Dismiss
+          </button>
+        </div>
+      {:else if selectedChange}
+        <div class="annotation-feature-meta">
+          <span class="annotation-badge">
+            {selectedAnnotationEntry ? 'Saved note' : 'Selected edit'}
+          </span>
+          <span class="annotation-line">L{selectedChange.location.line}</span>
+        </div>
+
+        <div class="annotation-summary-card">
+          <p class="annotation-summary-excerpt">“{selectedChange.text}”</p>
+          {#if selectedAnnotationEntry}
+            <p class="annotation-summary-copy">{selectedAnnotationEntry.annotation.rationale}</p>
+            {#if selectedAnnotationEntry.annotation.matchedRule}
+              <p class="annotation-summary-meta">Matches WRITING.md: {selectedAnnotationEntry.annotation.matchedRule}</p>
+            {/if}
+          {:else}
+            <p class="annotation-summary-meta">
+              No rationale saved yet. Add one only when the why matters downstream.
+            </p>
+          {/if}
+        </div>
+
+        {#if relatedLintFindings.length > 0}
+          <div class="annotation-inline-notes">
+            {#each relatedLintFindings as finding}
+              <div class="annotation-inline-note">
+                <span>{finding.label}</span>
+                <p>{finding.snippet}</p>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="annotation-actions-row">
+          <button
+            type="button"
+            class="annotation-primary control-motion control-focus control-raise"
+            onclick={onStartCompose}
+          >
+            {selectedAnnotationEntry ? 'Edit rationale' : 'Add rationale'}
+          </button>
+          {#if selectedAnnotationEntry}
+            <button
+              type="button"
+              class="annotation-secondary destructive control-motion control-focus"
+              onclick={onRemoveSelected}
+            >
+              Remove
+            </button>
+          {/if}
+        </div>
       {:else}
         <div class="annotation-empty-state">
-          <p>Select a change to capture the thinking behind it.</p>
-          <span>Use the rail, anchor marks, or ⌘/.</span>
+          <p>Select an edit from the rail to review it.</p>
+          <span>Use ⌘/ only when you actually want to write a rationale.</span>
         </div>
       {/if}
     </section>
 
-    {#if relatedLintFindings.length > 0}
-      <section class="annotation-section">
-        <div class="section-heading">Related slop</div>
-        <div class="note-stack">
-          {#each relatedLintFindings as finding}
-            <article class="note-card slop-card">
-              <span class="note-label">{finding.label}</span>
-              <p>{finding.snippet}</p>
-            </article>
-          {/each}
-        </div>
-      </section>
-    {/if}
-
     <section class="annotation-section">
       <div class="section-heading">Saved notes</div>
-      {#if annotatedChanges.length === 0}
-        <p class="section-empty">No rationales yet. Save the important ones so the agent gets the why, not just the diff.</p>
+      {#if annotationEntries.length === 0}
+        <p class="section-empty">No rationales yet. Keep the important ones; skip the obvious.</p>
       {:else}
         <div class="note-stack">
-          {#each annotatedChanges as entry, index}
+          {#each annotationEntries as entry}
             <button
               type="button"
               class="note-card control-motion control-focus"
-              class:selected={selectedChange?.id === entry.change.id}
+              class:selected={selectedAnnotationEntry?.annotation.id === entry.annotation.id}
+              class:stale={entry.status === 'stale'}
               class:density-manuscript={densityMode === 'manuscript'}
-              onclick={() => onSelectChange(entry.change)}
+              onclick={() =>
+                entry.status === 'active' && entry.change
+                  ? onSelectChange(entry.change)
+                  : onSelectAnnotation(entry.annotation.id)}
             >
               <div class="note-card-top">
-                <span class="note-label">Edit {index + 1}</span>
-                <span class="note-line">L{entry.change.location.line}</span>
+                <span class="note-label">
+                  {entry.status === 'active' ? `Note ${entry.displayIndex}` : 'Stale'}
+                </span>
+                <span class="note-line">
+                  {#if entry.status === 'active' && entry.change}
+                    L{entry.change.location.line}
+                  {:else}
+                    Needs review
+                  {/if}
+                </span>
               </div>
-              <p>{entry.annotation?.rationale || ''}</p>
+              <p>{entry.annotation.rationale}</p>
             </button>
           {/each}
         </div>
@@ -140,7 +237,7 @@
     line-height: 1.2;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--delete-ink);
+    color: var(--ink-ghost);
     font-weight: 600;
   }
 
@@ -161,13 +258,15 @@
     gap: var(--space-6);
   }
 
-  .annotation-feature {
+  .annotation-feature,
+  .annotation-section {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
   }
 
-  .annotation-feature-meta {
+  .annotation-feature-meta,
+  .note-card-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -182,40 +281,112 @@
     color: var(--ink-ghost);
   }
 
-  .annotation-empty-state {
-    border: 1px dashed color-mix(in srgb, var(--paper-edge) 95%, transparent);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-    background: color-mix(in srgb, var(--paper-bright) 40%, transparent);
+  .annotation-badge.stale {
+    color: color-mix(in srgb, var(--delete-ink) 88%, var(--ink));
   }
 
-  .annotation-empty-state p {
+  .annotation-empty-state,
+  .annotation-summary-card {
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    background: color-mix(in srgb, var(--paper-bright) 58%, transparent);
+  }
+
+  .annotation-summary-card.stale {
+    border-color: color-mix(in srgb, var(--delete-line) 58%, transparent);
+    background: color-mix(in srgb, var(--delete-bg) 32%, var(--paper-bright));
+  }
+
+  .annotation-empty-state p,
+  .annotation-summary-excerpt,
+  .annotation-summary-copy,
+  .note-card p,
+  .annotation-inline-note p {
     font-family: var(--font-body);
     font-size: var(--text-annotation);
+    line-height: 1.5;
     color: var(--annotation-ink);
+  }
+
+  .annotation-summary-excerpt {
     font-style: italic;
   }
 
+  .annotation-summary-copy {
+    margin-top: 0.65rem;
+  }
+
   .annotation-empty-state span,
-  .section-empty {
+  .section-empty,
+  .annotation-summary-meta {
     display: block;
-    margin-top: 0.4rem;
+    margin-top: 0.45rem;
     font-family: var(--font-ui);
     font-size: var(--text-ui-small);
     color: var(--ink-ghost);
     line-height: 1.45;
   }
 
-  .annotation-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
+  .annotation-inline-notes,
   .note-stack {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .annotation-inline-note {
+    border-top: 1px solid color-mix(in srgb, var(--paper-edge) 78%, transparent);
+    padding-top: var(--space-2);
+  }
+
+  .annotation-inline-note span {
+    font-family: var(--font-ui);
+    font-size: var(--text-ui-small);
+    color: var(--slop-ink);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .annotation-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .annotation-primary,
+  .annotation-secondary {
+    border-radius: 999px;
+    padding: 0.45rem 0.9rem;
+    font-family: var(--font-ui);
+    font-size: var(--text-ui);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .annotation-primary {
+    color: var(--paper-bright);
+    background: var(--accent);
+  }
+
+  .annotation-primary:hover {
+    background: var(--accent-hover);
+  }
+
+  .annotation-secondary {
+    color: var(--ink-faded);
+    background: transparent;
+    border-color: color-mix(in srgb, var(--paper-edge) 90%, transparent);
+  }
+
+  .annotation-secondary:hover {
+    color: var(--ink);
+    border-color: color-mix(in srgb, var(--ink-ghost) 80%, transparent);
+  }
+
+  .annotation-secondary.destructive:hover {
+    color: var(--delete-ink);
+    border-color: color-mix(in srgb, var(--delete-ink) 45%, transparent);
   }
 
   .note-card {
@@ -223,47 +394,21 @@
     text-align: left;
     padding: 0.8rem 0.95rem;
     border-radius: var(--radius-xl);
-    border: 1px solid color-mix(in srgb, var(--chrome-border) 95%, transparent);
-    background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), var(--shadow-note);
+    border: 1px solid color-mix(in srgb, var(--paper-edge) 88%, transparent);
+    background: color-mix(in srgb, var(--paper-bright) 64%, transparent);
   }
 
   .note-card.density-manuscript {
-    border-radius: var(--radius-lg);
-    box-shadow: none;
     background: transparent;
-    border-color: color-mix(in srgb, var(--paper-edge) 85%, transparent);
   }
 
   .note-card.selected {
-    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-    background: color-mix(in srgb, var(--accent-subtle) 32%, var(--paper-bright));
+    border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+    background: color-mix(in srgb, var(--accent-subtle) 28%, var(--paper-bright));
   }
 
-  .note-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    margin-bottom: 0.35rem;
-  }
-
-  .note-card p {
-    font-family: var(--font-body);
-    font-size: var(--text-annotation);
-    line-height: 1.45;
-    color: var(--annotation-ink);
-    font-style: italic;
-  }
-
-  .slop-card {
-    border-color: color-mix(in srgb, var(--slop-line) 70%, transparent);
-    background: color-mix(in srgb, var(--slop-bg) 78%, var(--paper-bright));
-    box-shadow: none;
-  }
-
-  .slop-card .note-label {
-    color: color-mix(in srgb, var(--slop-ink) 85%, var(--ink));
+  .note-card.stale {
+    border-color: color-mix(in srgb, var(--delete-line) 52%, transparent);
   }
 
   .density-review .annotation-header,

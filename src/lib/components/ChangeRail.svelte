@@ -6,10 +6,11 @@
 
   import { summarizeText } from '../utils/text.js';
 
-  /** @type {{ diffResult?: DiffResult | null, annotations?: Map<string, import('../stores/app.js').Annotation>, slopLines?: Set<number>, selectedChangeId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void }} */
+  /** @type {{ changes?: Change[], annotationChangeIds?: Set<string>, annotationCount?: number, slopLines?: Set<number>, selectedChangeId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void }} */
   let {
-    diffResult = null,
-    annotations = new Map(),
+    changes = [],
+    annotationChangeIds = new Set(),
+    annotationCount = 0,
     slopLines = new Set(),
     selectedChangeId = null,
     currentLine = /** @type {number | null} */ (1),
@@ -17,7 +18,6 @@
   } = $props();
 
   const sortedChanges = $derived.by(() => {
-    const changes = diffResult?.changes ?? [];
     return [...changes].sort((left, right) => left.editedOffset - right.editedOffset);
   });
 
@@ -90,7 +90,7 @@
       <span class="rail-kicker">Changes</span>
       <div class="rail-tallies">
         <span>{sortedChanges.length} edits</span>
-        <span>{annotations.size} noted</span>
+        <span>{annotationCount} noted</span>
         <span>{slopLines.size} flagged</span>
       </div>
     </div>
@@ -107,7 +107,7 @@
   {:else}
     <ol class="change-list">
       {#each sortedChanges as change, index}
-        {@const annotated = annotations.has(change.id)}
+        {@const annotated = annotationChangeIds.has(change.id)}
         {@const nearCursor = isNearCursor(change)}
         {@const selected = selectedChangeId === change.id}
         {@const tone = markerTone(change)}

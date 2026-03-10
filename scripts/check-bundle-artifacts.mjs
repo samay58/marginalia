@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import DiffMatchPatch from 'diff-match-patch';
 import { computeDiff } from '../src/lib/utils/diff.js';
 import { computeSemanticChanges } from '../src/lib/utils/semantic-diff.js';
+import { createAnnotationRecord, resolveAnnotations } from '../src/lib/utils/annotations.js';
 import { generateBundle } from '../src/lib/utils/bundle.js';
 
 const dmp = new DiffMatchPatch();
@@ -64,19 +65,22 @@ async function testBundleProvenanceAndPatch() {
 
   const diffResult = computeDiff(original, edited, []);
   const semanticChanges = computeSemanticChanges(original, edited);
-  const annotations = new Map();
+  const annotations = [];
 
   const listInsertion = diffResult.changes.find(
     (change) => change.type === 'insertion' && change.text.includes('migration notes')
   );
   if (listInsertion) {
-    annotations.set(listInsertion.id, {
-      rationale: 'Flag migration work explicitly to reduce rollout ambiguity.',
-      category: 'clarity',
-      writingMdRule: null,
-      principleCandidate: true,
-    });
+    annotations.push(
+      createAnnotationRecord({
+        change: listInsertion,
+        editedText: edited,
+        rationale: 'Flag migration work explicitly to reduce rollout ambiguity.',
+        matchedRule: null,
+      })
+    );
   }
+  const resolvedAnnotations = resolveAnnotations(annotations, diffResult, edited);
 
   const bundle = await generateBundle({
     filePath,
@@ -84,7 +88,7 @@ async function testBundleProvenanceAndPatch() {
     editedContent: edited,
     diffResult,
     semanticChanges,
-    annotations,
+    annotations: resolvedAnnotations,
     generalNotes: 'Keep this section factual and direct.',
     startTime: new Date(Date.now() - 150_000),
     principlesPath: '/tmp/WRITING.md',
@@ -104,7 +108,7 @@ async function testBundleProvenanceAndPatch() {
 
   const provenance = JSON.parse(bundle.files['provenance.json']);
   assert.equal(provenance.schema_version, '1.0', 'unexpected provenance schema version');
-  assert.equal(provenance.bundle.format_version, '2.0', 'unexpected bundle format version');
+  assert.equal(provenance.bundle.format_version, '3.0', 'unexpected bundle format version');
   assert.equal(provenance.bundle.source_file, filePath, 'source file mismatch in provenance');
   assert.equal(
     provenance.counts.semantic_changes,
@@ -145,8 +149,12 @@ async function testBundleProvenanceAndPatch() {
   );
 
   const changesJson = JSON.parse(bundle.files['changes.json']);
-  assert.equal(changesJson.bundle_format_version, '2.0', 'changes.json missing format marker');
+  assert.equal(changesJson.bundle_format_version, '3.0', 'changes.json missing format marker');
   assert.ok(Array.isArray(changesJson.semantic_changes), 'expected semantic_changes array');
+
+  const annotationsJson = JSON.parse(bundle.files['annotations.json']);
+  assert.equal(annotationsJson.schema_version, '3.0', 'annotations.json missing schema version');
+  assert.equal(annotationsJson.annotations.length, resolvedAnnotations.length, 'annotation count mismatch');
 }
 
 async function main() {

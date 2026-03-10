@@ -35,7 +35,7 @@
     {
       name: 'summary_for_agent.md',
       desc: 'The only file the agent needs. Clear instructions, grounded in your actual edits.',
-      preview: `## Review summary\n\n- 7 changes (4 annotated)\n- Pattern to repeat: remove hedging, front-load the point\n\n### Changes\n1. Cut filler phrases and hedges (tone)\n2. Moved the thesis to the first paragraph (structure)\n\n### General notes\n- Keep sentences concrete. Prefer numbers.\n`,
+      preview: `## Review summary\n\n- 7 edits reviewed\n- Pattern to repeat: remove hedging, front-load the point\n\n### Feedback\n1. Remove filler so the thesis lands immediately.\n2. Keep claims concrete and quantified.\n\n### General notes\n- Keep sentences concrete. Prefer numbers.\n`,
     },
     {
       name: 'changes.patch',
@@ -45,17 +45,17 @@
     {
       name: 'changes.json',
       desc: 'Structured diff with stable IDs so rationales stay anchored.',
-      preview: `{\n  \"bundle_format_version\": 2,\n  \"changes\": [\n    { \"id\": \"c_ab12\", \"type\": \"replace\", \"from\": \"kind of\", \"to\": \"\" }\n  ]\n}\n`,
+      preview: `{\n  \"bundle_format_version\": \"3.0\",\n  \"changes\": [\n    {\n      \"id\": \"c_ab12\",\n      \"type\": \"deletion\",\n      \"text\": \"kind of\",\n      \"location\": { \"line\": 3, \"col\": 9 }\n    }\n  ]\n}\n`,
     },
     {
       name: 'annotations.json',
-      desc: 'Short rationales keyed to change IDs, plus session-level notes.',
-      preview: `{\n  \"annotations\": {\n    \"c_ab12\": { \"category\": \"tone\", \"rationale\": \"Remove hedging.\" }\n  },\n  \"general_notes\": \"Keep sentences concrete.\"\n}\n`,
+      desc: 'Short rationales stored as durable annotation records with target metadata and stale-note status.',
+      preview: `{\n  \"schema_version\": \"3.0\",\n  \"annotations\": [\n    {\n      \"id\": \"note_m8xy1a\",\n      \"rationale\": \"Remove hedging.\",\n      \"status\": \"active\",\n      \"matched_rule\": null,\n      \"target\": {\n        \"change_id\": \"c_ab12\",\n        \"resolved_change_id\": \"c_ab12\",\n        \"type\": \"deletion\",\n        \"excerpt\": \"kind of\"\n      }\n    }\n  ],\n  \"general_notes\": \"Keep sentences concrete.\"\n}\n`,
     },
     {
       name: 'provenance.json',
       desc: 'Hashes, sizes, version metadata. Useful when you want to trust the capture.',
-      preview: `{\n  \"schema_version\": 1,\n  \"artifacts\": {\n    \"final.md\": { \"sha256\": \"...\" },\n    \"changes.patch\": { \"sha256\": \"...\" }\n  }\n}\n`,
+      preview: `{\n  \"schema_version\": \"1.0\",\n  \"bundle\": { \"format_version\": \"3.0\" },\n  \"artifacts\": [\n    { \"file\": \"final.md\", \"sha256\": \"...\", \"bytes\": 4821 },\n    { \"file\": \"changes.patch\", \"sha256\": \"...\", \"bytes\": 913 }\n  ]\n}\n`,
     },
   ];
 
@@ -243,7 +243,7 @@
               Rationales stay attached to the edit they refer to, so the agent doesn't have to infer which sentence you meant.
             </p>
             <pre class="bundle-preview"><code>Change: "kind of" -> (removed)
-Why (Tone): Remove hedging. Keep claims crisp.</code></pre>
+Why: Remove hedging. Keep claims crisp.</code></pre>
             <p>
               Keyboard-first: comment an edit with <code>⌘ /</code>, leave general notes with <code>⌘ G</code>, finish with <code>Esc</code>.
             </p>

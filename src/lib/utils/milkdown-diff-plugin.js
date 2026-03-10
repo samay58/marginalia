@@ -173,10 +173,14 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
             }
             const changeId = changeEl.dataset?.changeId;
             const changeText = changeEl.dataset?.changeText;
+            const changeType = changeEl.dataset?.changeType;
+
+            if (changeType !== 'deletion') {
+              return false;
+            }
 
             if (changeId && changeText) {
               const rect = changeEl.getBoundingClientRect();
-              // Position popover to the right of the element
               currentClickHandler(changeId, changeText, rect.right + 8, rect.top);
               return true;
             }

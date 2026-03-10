@@ -153,7 +153,7 @@ smoke_test() {
   ensure_hook_script
 
   local tmp_file="/tmp/marginalia-smoke-$$-draft.md"
-  trap 'rm -f "${tmp_file}"' EXIT
+  trap '[ -n "${tmp_file:-}" ] && rm -f "${tmp_file}"' EXIT
 
   cat >"${tmp_file}" <<'EOF'
 <!-- REVIEW -->

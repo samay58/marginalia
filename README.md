@@ -1,111 +1,82 @@
 # Marginalia
 
-Editing longform drafts with an agent is still weirdly lossy.
+Marginalia is a disposable macOS review app for agent-written drafts.
 
-The agent writes a draft. You move it to a real editor, mark it up, then translate those edits back into instructions. Somewhere in that translation, nuance dies: what you changed, why you changed it, and what pattern you want repeated next time.
+It opens when a draft hits disk, lets you edit inline, captures short rationales only when they matter, then returns a clean bundle the agent can use immediately.
 
-Marginalia is an experiment in a different interaction:
-launch a small, disposable review app *from inside the agentic CLI loop* the moment a draft hits disk, capture feedback as structured edits + short rationales, then hand the agent a clean summary it can apply immediately.
+![Marginalia desktop review surface](docs/assets/review-ui.png)
 
-The core idea is not “build a better editor.” It’s “make feedback frictionless.” Disposable software should be light: open fast, do one job, get out of the way.
+_Desktop review surface: change rail, manuscript editor, and focused rationale column._
+
+## Why it exists
+
+The normal loop is lossy:
+
+1. The agent writes a draft.
+2. You edit it somewhere else.
+3. You explain those edits back to the agent.
+4. The agent guesses what to repeat.
+
+Marginalia removes the translation step. Your edits become the feedback channel.
 
 ## What it does
 
-- Opens a markdown file in a native macOS window.
-- You edit inline inside a three-part review desk: change index, manuscript, and annotations.
-- Diffing is computed from the rendered plain text with token-aware segmentation, so visible edits read like editorial rewrites instead of raw character shards.
-- You can attach a short rationale to a change (`⌘ /`) or leave session-level notes (`⌘ G`).
-- Switch between `Review` and `Manuscript` density modes to optimize for fast scanning vs comfortable reading.
-- Tone lint is explainable and configurable: toggle it on/off and ignore noisy rules for the current session.
-- Close with `Esc` / `⌘ Enter`.
-- Marginalia writes a “bundle” directory with:
-  - the original + final text
-  - a structured diff (`changes.json`)
-  - your rationales (`annotations.json`)
-  - an apply-ready patch (`changes.patch`)
-  - provenance + artifact hashes (`provenance.json`)
-  - a single file the agent should read (`summary_for_agent.md`)
+- Opens one markdown file in a native review window.
+- Shows a stable change rail, a manuscript editor, and a focused rationale surface.
+- Computes diffs from rendered plain text so edits read like editorial changes, not character noise.
+- Lets you add change-bound rationales with `⌘/` and session notes with `⌘G`.
+- Persists recovery snapshots and marks ambiguous note remaps as stale instead of silently moving them.
+- Writes a 7-file review bundle on close.
 
-## Install (macOS)
+## Install
 
-Requires `jq` (`brew install jq`).
+Requires macOS and `jq`.
 
 ```bash
+brew install jq
 curl -fsSL https://raw.githubusercontent.com/samay58/marginalia/main/scripts/install.sh | bash
 ```
 
-If `marginalia` isn’t on your `PATH` after install, add `~/.local/bin` to `PATH` (the installer prints the exact line).
+If the CLI lands in `~/.local/bin`, add that directory to `PATH`.
 
-## Install inside an agentic CLI session
+## Hook setup
 
-Marginalia works best when it’s launched automatically after the agent writes a draft file.
+Marginalia is designed to run from a post-write hook.
 
-### Claude Code (recommended)
-
-Global hook:
+Global Claude Code hook:
 
 ```bash
 marginalia init --global
 ```
 
-Or per-project:
+Project-local hook:
 
 ```bash
 marginalia init
 ```
 
-Async hook mode (non-blocking):
+Async hook mode:
 
 ```bash
 marginalia init --async
 ```
 
-Manual config (`~/.claude/settings.json`):
+Default trigger rules:
 
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "MARGINALIA_REVIEW_MODE=async bash ~/.marginalia/hooks/post-write.sh",
-            "async": true,
-            "timeout": 1800000
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+- files ending in `-draft.md`
+- files containing `<!-- REVIEW -->`
 
-Default trigger rules (in the hook):
-- any file ending in `-draft.md`
-- any file containing `<!-- REVIEW -->`
-
-### Sync vs async behavior
-
-- `marginalia init` configures **sync mode** (default): Claude waits for review completion.
-- `marginalia init --async` configures **async mode**: Claude continues immediately, and review output arrives on a later turn when finished.
-- Marginalia hook requests are always queued to one active review window at a time, so rapid write bursts do not spawn window storms.
-
-### Other agentic CLIs
-
-If your agentic CLI supports “post write” hooks, do the same thing:
-run `marginalia open <file> --out <status-json-path>` as a blocking step, then feed `summary_for_agent.md` back into the agent.
+If your CLI supports post-write hooks, call `marginalia open <file> --out <status-path>` and feed the resulting `summary_for_agent.md` back into the agent.
 
 ## Usage
 
-Open a file:
+Open a file directly:
 
 ```bash
 marginalia open ./draft.md
 ```
 
-Custom bundle output dir + status path (useful for hooks):
+Open with explicit bundle and status output paths:
 
 ```bash
 marginalia open ./draft.md \
@@ -113,19 +84,20 @@ marginalia open ./draft.md \
   --out /tmp/marginalia.status.json
 ```
 
-Optional: pass a principles file (your writing rules). If present, Marginalia will highlight violations and try to match rationales to rules.
+Optional writing principles:
 
 ```bash
 marginalia open ./draft.md --principles ~/WRITING.md
 ```
 
-## Where the bundle goes
+## Bundle contract
 
-By default:
+Bundles are written to:
 
 `~/.marginalia/bundles/[timestamp]_[filename]/`
 
-Bundle contents:
+Each bundle contains:
+
 - `original.md`
 - `final.md`
 - `changes.json`
@@ -134,77 +106,49 @@ Bundle contents:
 - `provenance.json`
 - `summary_for_agent.md`
 
+`summary_for_agent.md` is the primary agent input. The other files exist for exactness, automation, and debugging.
+
 ## Shortcuts
 
 | Key | Action |
-|-----|--------|
-| Esc | Close and output bundle |
-| ⌘ Enter | Same as Esc |
-| ⌘ O | Open file |
-| ⌘ / | Comment on current edit |
-| ⌘ G | General notes |
-| ⌘ Z | Undo |
-| ⌘ ⇧ Z | Redo |
+| --- | --- |
+| `Esc` | Finalize review and write bundle |
+| `⌘ Enter` | Finalize review |
+| `⌘ /` | Start a rationale for the nearest edit |
+| `⌘ G` | Toggle session notes |
+| `⌘ O` | Open a different draft |
+| `⌘ ⇧ O` | Toggle references |
+| `⌘ Z` | Undo |
+| `⌘ ⇧ Z` | Redo |
 
 ## Development
 
 ```bash
 pnpm install
-pnpm tauri dev   # development
-pnpm tauri build # production app bundle
-pnpm tauri:build:dmg # DMG (requires GUI)
+pnpm tauri dev
+pnpm run check:diff
+pnpm run check:annotations
+pnpm run check:semantic
+pnpm run check:bundle
+pnpm run check:hook
+pnpm run check:lint
+pnpm run check
+pnpm run build
 ```
 
 Notes:
-- `pnpm dev` serves the marketing site at `/`. The review UI is at `/review` and requires Tauri APIs.
-- `pnpm tauri dev` opens the desktop app (it loads `/review`).
 
-Output: `src-tauri/target/release/bundle/macos/Marginalia.app`
+- `pnpm dev` serves the marketing site.
+- `pnpm tauri dev` runs the desktop review app at `/review`.
+- `pnpm tauri:build:app` builds the `.app`.
+- `pnpm tauri:build:dmg` builds the DMG release artifact.
 
-## Local App QA (Replace `/Applications` Copy)
+## Docs
 
-1. Build and verify:
-
-```bash
-pnpm install
-pnpm run check
-pnpm run build
-pnpm run tauri:build:app
-```
-
-2. Replace installed app (keeps a timestamped backup):
-
-```bash
-APP_SRC="src-tauri/target/release/bundle/macos/Marginalia.app"
-APP_DST="/Applications/Marginalia.app"
-BACKUP="/Applications/Marginalia.app.bak.$(date +%Y%m%d%H%M%S)"
-
-if [ -d "$APP_DST" ]; then
-  sudo mv "$APP_DST" "$BACKUP"
-fi
-sudo ditto "$APP_SRC" "$APP_DST"
-```
-
-3. Launch and test from installed app path:
-
-```bash
-open -a /Applications/Marginalia.app
-```
-
-4. Hook/CLI smoke test against installed app:
-
-```bash
-MARGINALIA_APP_PATH=/Applications/Marginalia.app ./scripts/marginalia smoke-test
-```
-
-5. Icon/logo verification:
-- Launch Marginalia from Applications (or `open -a /Applications/Marginalia.app`) so LaunchServices applies the app icon in Dock.
-- If macOS shows a stale icon cache after replacement, run:
-
-```bash
-touch /Applications/Marginalia.app
-killall Dock
-```
+- [docs/README.md](/Users/samaydhawan/Projects/active/marginalia/docs/README.md)
+- [docs/architecture.md](/Users/samaydhawan/Projects/active/marginalia/docs/architecture.md)
+- [docs/reliability.md](/Users/samaydhawan/Projects/active/marginalia/docs/reliability.md)
+- [docs/maintainers/release.md](/Users/samaydhawan/Projects/active/marginalia/docs/maintainers/release.md)
 
 ## License
 

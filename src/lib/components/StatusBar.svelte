@@ -1,5 +1,5 @@
 <script>
-  /** @type {{ editCount?: number, slopCount?: number, annotationCount?: number, autosaveLabel?: string, degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, rightPaneMode?: 'annotations' | 'reference', hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
+  /** @type {{ editCount?: number, slopCount?: number, annotationCount?: number, autosaveLabel?: string, degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
   let {
     editCount = 0,
     slopCount = 0,
@@ -8,15 +8,13 @@
     degradedMode = false,
     drawerOpen = false,
     compactLayout = false,
-    rightPaneMode = 'annotations',
     hasReferences = false,
     onToggleDrawer = () => {},
     onToggleReference = () => {},
   } = $props();
 
   const referenceLabel = $derived.by(() => {
-    if (compactLayout) return hasReferences ? 'reference' : 'add ref';
-    return rightPaneMode === 'reference' ? 'annotations' : 'reference';
+    return hasReferences ? 'reference' : 'add ref';
   });
 </script>
 

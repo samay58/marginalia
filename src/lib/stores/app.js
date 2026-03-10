@@ -1,13 +1,33 @@
 import { writable, derived } from 'svelte/store';
 import { computeDiff, groupChanges, getLinesWithChanges, summarizeChanges } from '../utils/diff.js';
+import {
+  createAnnotationId,
+  isVisibleChange,
+  normalizeAnnotationRecord,
+  resolveAnnotations,
+  sortResolvedAnnotations,
+} from '../utils/annotations.js';
 
 /**
- * @typedef {Object} Annotation
- * @property {string[]} changeIds - IDs of changes this annotation applies to
+ * @typedef {Object} AnnotationTarget
+ * @property {string | null} changeId - Last resolved change id
+ * @property {'deletion' | 'insertion' | null} type - Last resolved change type
+ * @property {string} excerpt - Changed text excerpt
+ * @property {number | null} line - Line hint in the edited document
+ * @property {string} beforeLine - Previous line context
+ * @property {string} lineText - Current line context
+ * @property {string} afterLine - Next line context
+ * @property {string} blockKey - Context hash for stable remapping
+ */
+
+/**
+ * @typedef {Object} AnnotationRecord
+ * @property {string} id - Stable annotation id
  * @property {string} rationale - Short rationale text
- * @property {string} [category] - Category like "tone", "clarity", etc.
- * @property {string | null} [writingMdRule] - Matching WRITING.md rule if any
- * @property {boolean} [principleCandidate] - Whether this is a candidate for WRITING.md
+ * @property {string | null} matchedRule - Matching WRITING.md rule if any
+ * @property {AnnotationTarget} target - Current target metadata
+ * @property {string} createdAt - ISO timestamp
+ * @property {string} updatedAt - ISO timestamp
  */
 
 /**
@@ -17,7 +37,7 @@ import { computeDiff, groupChanges, getLinesWithChanges, summarizeChanges } from
  * @property {string} originalContent - Original content from file
  * @property {string} editedContent - Current edited content
  * @property {import('../utils/diff.js').DiffResult | null} diffResult - Computed diff
- * @property {Map<string, Annotation>} annotations - Map of change ID to annotation
+ * @property {AnnotationRecord[]} annotations - Saved annotation records
  * @property {string} generalNotes - Session-level notes
  * @property {Date} startTime - When the session started
  * @property {boolean} isDirty - Whether there are unsaved changes
@@ -42,8 +62,8 @@ export const originalPlainText = writable('');
 /** @type {import('svelte/store').Writable<string>} */
 export const editedPlainText = writable('');
 
-/** @type {import('svelte/store').Writable<Map<string, Annotation>>} */
-export const annotations = writable(new Map());
+/** @type {import('svelte/store').Writable<AnnotationRecord[]>} */
+export const annotations = writable([]);
 
 /** @type {import('svelte/store').Writable<Array<{ label: string, pattern: string, flags: string }>>} */
 export const slopMatchers = writable([]);
@@ -56,9 +76,6 @@ export const startTime = writable(new Date());
 
 /** @type {import('svelte/store').Writable<string | null>} */
 export const selectedChangeId = writable(null);
-
-/** @type {import('svelte/store').Writable<'annotations' | 'reference'>} */
-export const rightPaneMode = writable('annotations');
 
 /** @type {import('svelte/store').Writable<number | null>} */
 export const currentLine = writable(1);
@@ -114,16 +131,22 @@ export const hasChanges = derived(
   ([$original, $edited]) => $original !== $edited
 );
 
-/** Grouped changes for display */
-export const changeGroups = derived(diffResult, ($diff) => {
+/** Diff changes that are actually rendered in the UI */
+export const visibleChanges = derived(diffResult, ($diff) => {
   if (!$diff) return [];
-  return groupChanges($diff.changes);
+  return $diff.changes.filter(isVisibleChange);
+});
+
+/** Grouped changes for display */
+export const changeGroups = derived(visibleChanges, ($changes) => {
+  if (!$changes) return [];
+  return groupChanges($changes);
 });
 
 /** Lines that have changes */
-export const linesWithChanges = derived(diffResult, ($diff) => {
-  if (!$diff) return new Set();
-  return getLinesWithChanges($diff.changes);
+export const linesWithChanges = derived(visibleChanges, ($changes) => {
+  if (!$changes) return new Set();
+  return getLinesWithChanges($changes);
 });
 
 /** Summary text */
@@ -134,41 +157,54 @@ export const changeSummary = derived(diffResult, ($diff) => {
 
 /** Selected change object */
 export const selectedChange = derived(
-  [diffResult, selectedChangeId],
-  ([$diff, $selectedChangeId]) => {
-    if (!$diff || !$selectedChangeId) return null;
-    return $diff.changes.find((change) => change.id === $selectedChangeId) || null;
+  [visibleChanges, selectedChangeId],
+  ([$changes, $selectedChangeId]) => {
+    if (!$changes || !$selectedChangeId) return null;
+    return $changes.find((change) => change.id === $selectedChangeId) || null;
   }
 );
 
-/** Annotated changes in document order */
-export const annotatedChanges = derived(
-  [diffResult, annotations],
-  ([$diff, $annotations]) => {
-    if (!$diff || !$annotations || $annotations.size === 0) return [];
-    return $diff.changes
-      .map((change) => ({
-        change,
-        annotation: $annotations.get(change.id),
-      }))
-      .filter((entry) => entry.annotation)
-      .sort((left, right) => left.change.editedOffset - right.change.editedOffset);
+/** Saved annotations resolved against the current diff */
+export const resolvedAnnotations = derived(
+  [annotations, diffResult, editedPlainText],
+  ([$annotations, $diff, $editedText]) => {
+    if (!$annotations || $annotations.length === 0) return [];
+    return sortResolvedAnnotations(resolveAnnotations($annotations, $diff, $editedText || ''));
   }
 );
 
-/** Lines that have annotations */
-export const linesWithAnnotations = derived(
-  [diffResult, annotations],
-  ([$diff, $annotations]) => {
-    if (!$diff) return new Set();
-    const lines = new Set();
-    for (const [changeId, annotation] of $annotations) {
-      const change = $diff.changes.find((c) => c.id === changeId);
-      if (change) {
-        lines.add(change.location.line);
-      }
+/** Annotation entries with stable display ordering */
+export const annotationEntries = derived(resolvedAnnotations, ($entries) =>
+  $entries.map((entry, index) => ({
+    ...entry,
+    displayIndex: index + 1,
+  }))
+);
+
+/** Change ids that currently have an active saved annotation */
+export const annotatedChangeIds = derived(annotationEntries, ($entries) => {
+  const ids = new Set();
+  for (const entry of $entries) {
+    if (entry.status === 'active' && entry.change) {
+      ids.add(entry.change.id);
     }
-    return lines;
+  }
+  return ids;
+});
+
+/** Find the active annotation entry for the selected change */
+export const selectedAnnotation = derived(
+  [annotationEntries, selectedChangeId],
+  ([$entries, $selectedChangeId]) => {
+    if (!$selectedChangeId) return null;
+    return (
+      $entries.find(
+        (entry) =>
+          entry.status === 'active' &&
+          entry.change &&
+          entry.change.id === $selectedChangeId
+      ) || null
+    );
   }
 );
 
@@ -215,11 +251,11 @@ export function initializeWithContent(path, content) {
   // Plain text will be set after editor renders
   originalPlainText.set('');
   editedPlainText.set('');
-  annotations.set(new Map());
+  annotations.set([]);
   generalNotes.set('');
   startTime.set(new Date());
   selectedChangeId.set(null);
-  rightPaneMode.set('annotations');
+  currentLine.set(1);
 }
 
 /**
@@ -232,10 +268,9 @@ export function initializeWithContent(path, content) {
  * @param {string} [snapshot.originalPlainText]
  * @param {string} [snapshot.editedPlainText]
  * @param {string} [snapshot.generalNotes]
- * @param {Array<{ changeId: string, annotation: Annotation }>} [snapshot.annotations]
+ * @param {Array<any>} [snapshot.annotations]
  * @param {string} [snapshot.startedAt]
  * @param {string | null} [snapshot.selectedChangeId]
- * @param {'annotations' | 'reference'} [snapshot.rightPaneMode]
  */
 export function restoreFromSnapshot(snapshot) {
   const restoredFilePath = snapshot.filePath || '';
@@ -247,12 +282,36 @@ export function restoreFromSnapshot(snapshot) {
   const restoredEditedPlain =
     snapshot.editedPlainText || restoredOriginalPlain || '';
 
-  /** @type {Map<string, Annotation>} */
-  const restoredAnnotations = new Map();
+  /** @type {AnnotationRecord[]} */
+  const restoredAnnotations = [];
   if (Array.isArray(snapshot.annotations)) {
     for (const entry of snapshot.annotations) {
-      if (!entry || typeof entry.changeId !== 'string' || !entry.annotation) continue;
-      restoredAnnotations.set(entry.changeId, entry.annotation);
+      if (!entry) continue;
+      if (entry.annotation && typeof entry.changeId === 'string') {
+        restoredAnnotations.push(
+          normalizeAnnotationRecord({
+            id: entry.annotation.id || createAnnotationId(),
+            rationale: entry.annotation.rationale || '',
+            matchedRule: entry.annotation.writingMdRule || null,
+            target: {
+              changeId: entry.changeId,
+              type: entry.annotation.type || null,
+              excerpt: entry.annotation.excerpt || '',
+              line: entry.annotation.line || null,
+              beforeLine: '',
+              lineText: '',
+              afterLine: '',
+              blockKey: '',
+            },
+            createdAt: snapshot.startedAt || new Date().toISOString(),
+            updatedAt: snapshot.startedAt || new Date().toISOString(),
+          })
+        );
+        continue;
+      }
+      if (entry.id && entry.target) {
+        restoredAnnotations.push(normalizeAnnotationRecord(entry));
+      }
     }
   }
 
@@ -273,7 +332,7 @@ export function restoreFromSnapshot(snapshot) {
       ? snapshot.selectedChangeId
       : null
   );
-  rightPaneMode.set(snapshot.rightPaneMode === 'reference' ? 'reference' : 'annotations');
+  currentLine.set(1);
 }
 
 /**
@@ -310,28 +369,38 @@ export function setSlopMatchers(matchers) {
 }
 
 /**
- * Add or update an annotation for a change
- * @param {string} changeId
- * @param {Annotation} annotation
+ * Add a new annotation record
+ * @param {AnnotationRecord} annotation
  */
-export function setAnnotation(changeId, annotation) {
-  annotations.update((map) => {
-    const newMap = new Map(map);
-    newMap.set(changeId, annotation);
-    return newMap;
-  });
+export function addAnnotation(annotation) {
+  annotations.update((records) => [...records, normalizeAnnotationRecord(annotation)]);
+}
+
+/**
+ * Update an annotation record in place
+ * @param {string} annotationId
+ * @param {Partial<AnnotationRecord>} patch
+ */
+export function updateAnnotation(annotationId, patch) {
+  annotations.update((records) =>
+    records.map((record) =>
+      record.id === annotationId
+        ? normalizeAnnotationRecord({
+            ...record,
+            ...patch,
+            target: patch?.target ? { ...record.target, ...patch.target } : record.target,
+          })
+        : record
+    )
+  );
 }
 
 /**
  * Remove an annotation
- * @param {string} changeId
+ * @param {string} annotationId
  */
-export function removeAnnotation(changeId) {
-  annotations.update((map) => {
-    const newMap = new Map(map);
-    newMap.delete(changeId);
-    return newMap;
-  });
+export function removeAnnotation(annotationId) {
+  annotations.update((records) => records.filter((record) => record.id !== annotationId));
 }
 
 /**
@@ -355,13 +424,6 @@ export function clearSelectedChange() {
 }
 
 /**
- * @param {'annotations' | 'reference'} mode
- */
-export function setRightPaneMode(mode) {
-  rightPaneMode.set(mode === 'reference' ? 'reference' : 'annotations');
-}
-
-/**
  * Reset the store to initial state
  */
 export function reset() {
@@ -373,10 +435,9 @@ export function reset() {
   editedContent.set('');
   originalPlainText.set('');
   editedPlainText.set('');
-  annotations.set(new Map());
+  annotations.set([]);
   generalNotes.set('');
   startTime.set(new Date());
   selectedChangeId.set(null);
-  rightPaneMode.set('annotations');
   currentLine.set(1);
 }

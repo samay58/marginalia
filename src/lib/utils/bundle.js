@@ -7,11 +7,11 @@ import DiffMatchPatch from 'diff-match-patch';
 
 const dmp = new DiffMatchPatch();
 const textEncoder = new TextEncoder();
-const BUNDLE_FORMAT_VERSION = '2.0';
+const BUNDLE_FORMAT_VERSION = '3.0';
 const PROVENANCE_SCHEMA_VERSION = '1.0';
 
 /**
- * @typedef {import('../stores/app.js').Annotation} Annotation
+ * @typedef {import('./annotations.js').ResolvedAnnotation} ResolvedAnnotation
  * @typedef {import('./diff.js').Change} Change
  * @typedef {import('./diff.js').DiffResult} DiffResult
  * @typedef {import('./semantic-diff.js').SemanticChange} SemanticChange
@@ -176,50 +176,35 @@ function formatSemanticChange(change) {
 
 /**
  * Generate annotations.json content
- * @param {Map<string, Annotation>} annotations
- * @param {DiffResult} diffResult
+ * @param {ResolvedAnnotation[]} annotations
  * @param {string} generalNotes
  * @returns {object}
  */
-export function generateAnnotationsJson(annotations, diffResult, generalNotes) {
-  // Convert annotations map to array format
-  const annotationsList = [];
-  const principleCandidates = new Map();
-
-  for (const [changeId, annotation] of annotations) {
-    const change = diffResult.changes.find(c => c.id === changeId);
-
-    annotationsList.push({
-      change_ids: [changeId],
-      rationale: annotation.rationale,
-      category: annotation.category || null,
-      writing_md_rule: annotation.writingMdRule || null,
-      principle_candidate: annotation.principleCandidate || false,
-    });
-
-    // Track principle candidates
-    if (annotation.principleCandidate) {
-      const key = annotation.rationale.toLowerCase();
-      if (principleCandidates.has(key)) {
-        const existing = principleCandidates.get(key);
-        existing.occurrences++;
-        if (change) {
-          existing.examples.push(change.text.slice(0, 50));
-        }
-      } else {
-        principleCandidates.set(key, {
-          text: annotation.rationale,
-          occurrences: 1,
-          examples: change ? [change.text.slice(0, 50)] : [],
-        });
-      }
-    }
-  }
-
+export function generateAnnotationsJson(annotations, generalNotes) {
   return {
-    annotations: annotationsList,
+    schema_version: '3.0',
+    annotations: annotations.map((entry) => ({
+      id: entry.annotation.id,
+      rationale: entry.annotation.rationale,
+      status: entry.status,
+      matched_rule: entry.annotation.matchedRule || null,
+      reason: entry.reason || null,
+      created_at: entry.annotation.createdAt,
+      updated_at: entry.annotation.updatedAt,
+      target: {
+        change_id: entry.annotation.target.changeId,
+        resolved_change_id: entry.resolvedChangeId,
+        type: entry.annotation.target.type,
+        excerpt: entry.annotation.target.excerpt,
+        resolved_excerpt: entry.change?.text || null,
+        line: entry.annotation.target.line,
+        before_line: entry.annotation.target.beforeLine,
+        line_text: entry.annotation.target.lineText,
+        after_line: entry.annotation.target.afterLine,
+        block_key: entry.annotation.target.blockKey,
+      },
+    })),
     general_notes: generalNotes || '',
-    principle_candidates: Array.from(principleCandidates.values()),
   };
 }
 
@@ -232,7 +217,7 @@ export function generateAnnotationsJson(annotations, diffResult, generalNotes) {
  * @param {number} options.sessionDuration
  * @param {DiffResult} options.diffResult
  * @param {SemanticChange[]} options.semanticChanges
- * @param {Map<string, Annotation>} options.annotations
+ * @param {ResolvedAnnotation[]} options.annotations
  * @param {LintFinding[]} options.lintFindings
  * @param {string | null | undefined} options.principlesPath
  * @param {string} options.patchContent
@@ -279,7 +264,9 @@ export function generateProvenanceJson({
       deletions: diffResult.deletions,
       insertions: diffResult.insertions,
       semantic_changes: semanticChanges.length,
-      annotations: annotations.size,
+      annotations_total: annotations.length,
+      annotations_active: annotations.filter((entry) => entry.status === 'active').length,
+      annotations_stale: annotations.filter((entry) => entry.status === 'stale').length,
       lint_findings: lintFindings.length,
       patch_hunks: patchHunkCount,
     },
@@ -298,7 +285,7 @@ export function generateProvenanceJson({
  * @param {string} filename
  * @param {DiffResult} diffResult
  * @param {SemanticChange[]} semanticChanges
- * @param {Map<string, Annotation>} annotations
+ * @param {ResolvedAnnotation[]} annotations
  * @param {string} generalNotes
  * @param {number} sessionDuration
  * @param {LintFinding[]} [lintFindings]
@@ -314,10 +301,10 @@ export function generateSummaryMarkdown(
   lintFindings = []
 ) {
   const lines = [];
-  const minutes = Math.round(sessionDuration / 60);
+  const minutesLabel = sessionDuration < 60 ? '<1 min' : `${Math.round(sessionDuration / 60)} min`;
 
   lines.push(`# Review: ${filename}`);
-  lines.push(`${new Date().toISOString().slice(0, 10)} · ${minutes} min`);
+  lines.push(`${new Date().toISOString().slice(0, 10)} · ${minutesLabel}`);
   lines.push('');
 
   // Changes summary
@@ -343,50 +330,54 @@ export function generateSummaryMarkdown(
   // Feedback by priority
   lines.push('## Feedback (by priority)');
 
-  // Group annotations by whether they match WRITING.md rules
-  const important = [];
-  const other = [];
-
-  for (const [changeId, annotation] of annotations) {
-    const change = diffResult.changes.find(c => c.id === changeId);
-    const entry = {
-      change,
-      annotation,
-    };
-
-    if (annotation.writingMdRule) {
-      important.push(entry);
-    } else {
-      other.push(entry);
-    }
-  }
+  const important = annotations.filter(
+    (entry) => entry.status === 'active' && entry.annotation.matchedRule
+  );
+  const other = annotations.filter(
+    (entry) => entry.status === 'active' && !entry.annotation.matchedRule
+  );
+  const stale = annotations.filter((entry) => entry.status === 'stale');
 
   let num = 1;
 
-  for (const { change, annotation } of important) {
-    lines.push(`${num}. [IMPORTANT] ${annotation.rationale}`);
-    if (change) {
-      const preview = change.text.slice(0, 40);
-      lines.push(`   - "${preview}${change.text.length > 40 ? '...' : ''}"`);
+  for (const entry of important) {
+    lines.push(`${num}. [IMPORTANT] ${entry.annotation.rationale}`);
+    if (entry.change) {
+      const preview = entry.change.text.slice(0, 40);
+      lines.push(`   - "${preview}${entry.change.text.length > 40 ? '...' : ''}"`);
     }
-    if (annotation.writingMdRule) {
-      lines.push(`   - Matches WRITING.md: ${annotation.writingMdRule}`);
+    if (entry.annotation.matchedRule) {
+      lines.push(`   - Matches WRITING.md: ${entry.annotation.matchedRule}`);
     }
     lines.push('');
     num++;
   }
 
-  for (const { change, annotation } of other) {
-    lines.push(`${num}. ${annotation.rationale}`);
-    if (change) {
-      const preview = change.text.slice(0, 40);
-      lines.push(`   - "${preview}${change.text.length > 40 ? '...' : ''}"`);
-    }
-    if (annotation.category) {
-      lines.push(`   - Category: ${annotation.category}`);
+  for (const entry of other) {
+    lines.push(`${num}. ${entry.annotation.rationale}`);
+    if (entry.change) {
+      const preview = entry.change.text.slice(0, 40);
+      lines.push(`   - "${preview}${entry.change.text.length > 40 ? '...' : ''}"`);
     }
     lines.push('');
     num++;
+  }
+
+  if (important.length === 0 && other.length === 0) {
+    lines.push('No change-bound rationales.');
+    lines.push('');
+  }
+
+  if (stale.length > 0) {
+    lines.push('## Stale Notes');
+    for (const entry of stale) {
+      lines.push(`- ${entry.annotation.rationale}`);
+      if (entry.annotation.target.excerpt) {
+        lines.push(`  - Last target: "${entry.annotation.target.excerpt}"`);
+      }
+      lines.push('  - Status: stale (requires human confirmation)');
+    }
+    lines.push('');
   }
 
   if (lintFindings.length > 0) {
@@ -409,22 +400,6 @@ export function generateSummaryMarkdown(
     lines.push('');
   }
 
-  // Principle candidates
-  const candidates = [];
-  for (const annotation of annotations.values()) {
-    if (annotation.principleCandidate) {
-      candidates.push(annotation.rationale);
-    }
-  }
-
-  if (candidates.length > 0) {
-    lines.push('## Principle Candidates');
-    for (const candidate of candidates) {
-      lines.push(`- "${candidate}" → Review via /reflect`);
-    }
-    lines.push('');
-  }
-
   return lines.join('\n');
 }
 
@@ -436,7 +411,7 @@ export function generateSummaryMarkdown(
  * @param {string} options.editedContent
  * @param {DiffResult} options.diffResult
  * @param {SemanticChange[]} options.semanticChanges
- * @param {Map<string, Annotation>} options.annotations
+ * @param {ResolvedAnnotation[]} options.annotations
  * @param {string} options.generalNotes
  * @param {Date} options.startTime
  * @param {string | null} [options.principlesPath]
@@ -473,7 +448,7 @@ export async function generateBundle({
     2
   );
   const annotationsJson = JSON.stringify(
-    generateAnnotationsJson(annotations, diffResult, generalNotes),
+    generateAnnotationsJson(annotations, generalNotes),
     null,
     2
   );

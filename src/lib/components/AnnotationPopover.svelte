@@ -1,15 +1,16 @@
 <script>
   import AnnotationEditor from './AnnotationEditor.svelte';
 
-  /** @type {{ changeId?: string, text?: string, currentRationale?: string, currentCategory?: string, x?: number, y?: number, visible?: boolean, onSave?: (data: {changeId: string, rationale: string, category?: string}) => void, onRemove?: (data: {changeId: string}) => void, onClose?: () => void }} */
+  /** @type {{ changeId?: string, text?: string, draft?: string, x?: number, y?: number, visible?: boolean, canRemove?: boolean, onDraftInput?: (value: string) => void, onSave?: (data: {changeId: string, rationale: string}) => void, onRemove?: (data: {changeId: string}) => void, onClose?: () => void }} */
   let {
     changeId = '',
     text = '',
-    currentRationale = '',
-    currentCategory = '',
+    draft = '',
     x = 0,
     y = 0,
     visible = false,
+    canRemove = false,
+    onDraftInput = () => {},
     onSave = () => {},
     onRemove = () => {},
     onClose = () => {},
@@ -19,15 +20,16 @@
     onClose();
   }
 
-  /** @param {{ changeId: string, rationale: string, category?: string }} data */
-  function handleSave(data) {
-    onSave(data);
+  function handleSave() {
+    const rationale = draft.trim();
+    if (!changeId || !rationale) return;
+    onSave({ changeId, rationale });
     close();
   }
 
-  /** @param {{ changeId: string }} data */
-  function handleRemove(data) {
-    onRemove(data);
+  function handleRemove() {
+    if (!changeId) return;
+    onRemove({ changeId });
     close();
   }
 </script>
@@ -58,13 +60,14 @@
     </div>
 
     <AnnotationEditor
-      changeId={changeId}
       excerpt={text}
-      currentRationale={currentRationale}
-      currentCategory={currentCategory}
+      value={draft}
       autofocus={visible}
-      saveLabel={currentRationale ? 'Update rationale' : 'Save rationale'}
+      canRemove={canRemove}
+      saveLabel={canRemove ? 'Update rationale' : 'Save rationale'}
+      onInput={onDraftInput}
       onSave={handleSave}
+      onCancel={close}
       onRemove={handleRemove}
     />
   </div>

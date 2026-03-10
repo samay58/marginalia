@@ -1,41 +1,23 @@
 <script>
-  const categories = [
-    { label: 'Tone', value: 'tone' },
-    { label: 'Clarity', value: 'clarity' },
-    { label: 'Accuracy', value: 'accuracy' },
-    { label: 'Style', value: 'style' },
-    { label: 'Structure', value: 'structure' },
-  ];
-
-  /** @type {{ changeId?: string, excerpt?: string, currentRationale?: string, currentCategory?: string, emptyLabel?: string, saveLabel?: string, autofocus?: boolean, onSave?: (data: { changeId: string, rationale: string, category?: string }) => void, onRemove?: (data: { changeId: string }) => void }} */
+  /** @type {{ excerpt?: string, value?: string, emptyLabel?: string, saveLabel?: string, autofocus?: boolean, canRemove?: boolean, onInput?: (value: string) => void, onSave?: () => void, onCancel?: () => void, onRemove?: () => void }} */
   let {
-    changeId = '',
     excerpt = '',
-    currentRationale = '',
-    currentCategory = '',
+    value = '',
     emptyLabel = 'Capture why this change matters.',
     saveLabel = 'Save rationale',
     autofocus = false,
+    canRemove = false,
+    onInput = () => {},
     onSave = () => {},
+    onCancel = () => {},
     onRemove = () => {},
   } = $props();
 
-  let rationale = $state('');
-  let selectedCategory = $state('');
   /** @type {HTMLTextAreaElement | null} */
   let textareaEl = $state(null);
 
   $effect(() => {
-    changeId;
-    currentRationale;
-    currentCategory;
-    rationale = currentRationale || '';
-    selectedCategory = currentCategory || '';
-  });
-
-  $effect(() => {
     autofocus;
-    changeId;
     if (autofocus && textareaEl) {
       queueMicrotask(() => {
         textareaEl?.focus();
@@ -43,26 +25,20 @@
     }
   });
 
-  function handleSave() {
-    const trimmed = rationale.trim();
-    if (!changeId || !trimmed) return;
-    onSave({
-      changeId,
-      rationale: trimmed,
-      category: selectedCategory || undefined,
-    });
-  }
-
-  function handleRemove() {
-    if (!changeId) return;
-    onRemove({ changeId });
+  /** @param {Event & { currentTarget: HTMLTextAreaElement }} event */
+  function handleInput(event) {
+    onInput(event.currentTarget.value);
   }
 
   /** @param {KeyboardEvent} event */
   function handleKeydown(event) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      handleSave();
+      onSave();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
     }
   }
 
@@ -81,44 +57,43 @@
   <textarea
     bind:this={textareaEl}
     class="annotation-input control-focus"
-    rows="4"
-    bind:value={rationale}
+    rows="5"
+    value={value}
     placeholder="Remove the hedging. Say the point directly."
+    oninput={handleInput}
     onkeydown={handleKeydown}
   ></textarea>
 
-  <div class="annotation-categories">
-    {#each categories as category}
+  <div class="annotation-actions">
+    <div class="annotation-actions-left">
+      {#if canRemove}
+        <button
+          type="button"
+          class="annotation-remove control-motion control-focus"
+          onclick={onRemove}
+        >
+          Remove
+        </button>
+      {/if}
+    </div>
+
+    <div class="annotation-actions-right">
       <button
         type="button"
-        class="category-chip control-motion control-focus"
-        class:selected={selectedCategory === category.value}
-        onclick={() => {
-          selectedCategory = selectedCategory === category.value ? '' : category.value;
-        }}
+        class="annotation-cancel control-motion control-focus"
+        onclick={onCancel}
       >
-        {category.label}
+        Cancel
       </button>
-    {/each}
-  </div>
-
-  <div class="annotation-actions">
-    <button
-      type="button"
-      class="annotation-remove control-motion control-focus"
-      onclick={handleRemove}
-      disabled={!currentRationale}
-    >
-      Remove
-    </button>
-    <button
-      type="button"
-      class="annotation-save control-motion control-focus control-raise"
-      onclick={handleSave}
-      disabled={!changeId || !rationale.trim()}
-    >
-      {saveLabel}
-    </button>
+      <button
+        type="button"
+        class="annotation-save control-motion control-focus control-raise"
+        onclick={onSave}
+        disabled={!value.trim()}
+      >
+        {saveLabel}
+      </button>
+    </div>
   </div>
 </div>
 
@@ -133,7 +108,7 @@
   .annotation-empty {
     font-family: var(--font-body);
     font-size: var(--text-ui-small);
-    line-height: 1.45;
+    line-height: 1.5;
     font-style: italic;
     color: var(--annotation-muted);
   }
@@ -144,78 +119,55 @@
 
   .annotation-input {
     width: 100%;
-    min-height: 6.25rem;
+    min-height: 7rem;
     resize: vertical;
     border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
     border-radius: var(--radius-xl);
-    background: color-mix(in srgb, var(--paper-bright) 72%, transparent);
+    background: color-mix(in srgb, var(--paper-bright) 74%, transparent);
     color: var(--annotation-ink);
     padding: var(--space-3) var(--space-4);
     font-family: var(--font-body);
-    font-size: var(--text-annotation);
-    font-style: italic;
-    line-height: 1.45;
+    font-size: 0.95rem;
+    line-height: 1.55;
   }
 
   .annotation-input::placeholder {
     color: var(--annotation-muted);
   }
 
-  .annotation-categories {
+  .annotation-actions,
+  .annotation-actions-right {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-2);
-  }
-
-  .category-chip {
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--ink-faded);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    padding: 0.3rem 0.65rem;
-    cursor: pointer;
-  }
-
-  .category-chip:hover {
-    color: var(--ink);
-    border-color: color-mix(in srgb, var(--ink-ghost) 80%, transparent);
-  }
-
-  .category-chip.selected {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-    background: color-mix(in srgb, var(--accent-subtle) 85%, transparent);
   }
 
   .annotation-actions {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: var(--space-2);
   }
 
   .annotation-remove,
+  .annotation-cancel,
   .annotation-save {
     border-radius: 999px;
-    padding: 0.45rem 0.85rem;
+    padding: 0.45rem 0.9rem;
     font-family: var(--font-ui);
     font-size: var(--text-ui);
     border: 1px solid transparent;
     cursor: pointer;
   }
 
-  .annotation-remove {
-    color: var(--ink-ghost);
+  .annotation-remove,
+  .annotation-cancel {
+    color: var(--ink-faded);
     background: transparent;
     border-color: color-mix(in srgb, var(--paper-edge) 90%, transparent);
   }
 
-  .annotation-remove:hover:not(:disabled) {
-    color: var(--delete-ink);
-    border-color: color-mix(in srgb, var(--delete-ink) 40%, transparent);
-    background: color-mix(in srgb, var(--delete-bg) 75%, transparent);
+  .annotation-remove:hover,
+  .annotation-cancel:hover {
+    color: var(--ink);
+    border-color: color-mix(in srgb, var(--ink-ghost) 80%, transparent);
   }
 
   .annotation-save {
@@ -227,7 +179,6 @@
     background: var(--accent-hover);
   }
 
-  .annotation-remove:disabled,
   .annotation-save:disabled {
     cursor: not-allowed;
     opacity: 0.45;
