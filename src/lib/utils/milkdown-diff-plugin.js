@@ -137,25 +137,25 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
       key: diffPluginKey,
 
       state: {
-        init(_, state) {
-          const diffResult = getDiffResult();
-          const textMap = buildTextMap(state.doc);
-          return createDiffDecorations(state.doc, textMap, diffResult, getSelectedChangeId(), currentClickHandler);
+        init() {
+          return DecorationSet.empty;
         },
 
         apply(tr, oldDecorations, oldState, newState) {
-          if (tr.docChanged || tr.getMeta(diffPluginKey) === 'update') {
+          // Explicit trigger: full rebuild from latest diff data
+          if (tr.getMeta(diffPluginKey) === 'update') {
             const diffResult = getDiffResult();
-            if (!diffResult || !diffResult.changes) {
-              return DecorationSet.empty;
-            }
-            if (diffResult.changes.length === 0) {
+            if (!diffResult || !diffResult.changes || diffResult.changes.length === 0) {
               return DecorationSet.empty;
             }
             const textMap = buildTextMap(newState.doc);
             return createDiffDecorations(newState.doc, textMap, diffResult, getSelectedChangeId(), currentClickHandler);
           }
-          return oldDecorations.map(tr.mapping, tr.doc);
+          // Normal keystroke: cheaply map existing decoration positions
+          if (tr.docChanged) {
+            return oldDecorations.map(tr.mapping, tr.doc);
+          }
+          return oldDecorations;
         },
       },
 

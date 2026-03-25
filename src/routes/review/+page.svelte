@@ -51,6 +51,41 @@
   import { createAnnotationRecord, reanchorAnnotation } from '$lib/utils/annotations.js';
   import { computeDiff } from '$lib/utils/diff.js';
   import { computeSemanticChanges } from '$lib/utils/semantic-diff.js';
+  import { DialStore } from 'dialkit/store';
+
+  // DialKit: live-tunable desk layout parameters
+  const DESK_PANEL_ID = 'review-desk';
+  const DESK_CONFIG = {
+    railWidth: [240, 160, 360, 4],
+    rightWidth: [304, 200, 440, 4],
+    gap: [32, 8, 64, 2],
+    paddingX: [28, 8, 56, 2],
+    gutterWidth: [56, 24, 96, 2],
+    contentMax: [672, 480, 840, 8],
+    lineHeight: [27, 20, 40, 1],
+    headerHeight: [52, 36, 72, 2],
+  };
+
+  /** @type {Map<string, string>} */
+  const DESK_CSS_MAP = new Map([
+    ['railWidth', '--desk-rail-width'],
+    ['rightWidth', '--desk-right-width'],
+    ['gap', '--desk-gap'],
+    ['paddingX', '--desk-padding-x'],
+    ['gutterWidth', '--gutter-width'],
+    ['contentMax', '--content-max-width'],
+    ['lineHeight', '--line-height'],
+    ['headerHeight', '--header-height'],
+  ]);
+
+  function applyDeskValues() {
+    const vals = DialStore.getValues(DESK_PANEL_ID);
+    const s = document.documentElement.style;
+    for (const [key, prop] of DESK_CSS_MAP) {
+      const v = vals[key];
+      if (typeof v === 'number') s.setProperty(prop, `${v}px`);
+    }
+  }
 
   // Local state
   let notesExpanded = $state(false);
@@ -472,6 +507,8 @@
     const content = await invoke('read_file', { path });
     initializeWithContent(path, content);
     hasInitialDocument = true;
+    // If editor is already mounted, push new content explicitly
+    editorRef?.setContent?.(content);
     await activateSession(createSessionId());
     editorRef?.refreshSlop();
   }
@@ -496,7 +533,17 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
-    if (!tauriAvailable) return;
+    // DialKit: register panel and subscribe for live CSS updates
+    DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
+    applyDeskValues();
+    const unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
+
+    if (!tauriAvailable) {
+      return () => {
+        unsubDesk();
+        DialStore.unregisterPanel(DESK_PANEL_ID);
+      };
+    }
 
     /** @type {() => void} */
     let cleanup = () => {};
@@ -604,6 +651,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     return () => {
       cleanup();
+      unsubDesk();
+      DialStore.unregisterPanel(DESK_PANEL_ID);
     };
   });
 
@@ -627,9 +676,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   }
 
   $effect(() => {
-    // Trigger autosave when user-editable session data changes.
-    $editedContent;
-    $editedPlainText;
+    // Trigger autosave on non-keystroke session state changes.
+    // Keystroke-driven autosave is handled directly in handleContentChange.
     $generalNotes;
     $annotations;
     $selectedChangeId;
@@ -642,7 +690,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     popoverDraft;
     popoverAnnotationId;
     if (!sessionId || !snapshotPath || !hasInitialDocument || isHydratingSnapshot) return;
-    scheduleAutosave('content-change');
+    scheduleAutosave('state-change');
   });
 
   $effect(() => {
@@ -896,11 +944,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     await writeActiveSessionState(true, 'recovered');
     await persistSnapshot('recovered-resume');
 
-    // Ensure visual plugins catch up once editor reflects restored state.
-    setTimeout(() => {
-      editorRef?.refreshDiff?.();
-      editorRef?.refreshSlop?.();
-    }, 0);
+    // Push restored content to editor and refresh visual plugins.
+    // setContent already calls triggerDiffUpdate internally.
+    const restoredContent = snapshot.edited_content || snapshot.original_content || '';
+    editorRef?.setContent?.(restoredContent);
+    editorRef?.refreshSlop?.();
   }
 
   async function discardRecoveredSession() {
@@ -1100,6 +1148,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   /** @param {string} content */
   function handleContentChange(content) {
     updateContent(content);
+    scheduleAutosave('content-change');
   }
 
   /** @param {string} text */
@@ -1587,7 +1636,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     <div class="editor-column">
       <Editor
         bind:this={editorRef}
-        content={$editedContent}
+        initialContent={$editedContent}
         diffResult={$diffResult}
         annotationEntries={$annotationEntries}
         selectedAnnotationId={selectedAnnotationId}

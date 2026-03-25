@@ -12,9 +12,9 @@
 
   /** @typedef {{ annotationId: string, changeId: string, displayIndex: number, top: number, selected: boolean, preview: string }} AnchorMark */
 
-  /** @type {{ content?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
+  /** @type {{ initialContent?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
   let {
-    content = '',
+    initialContent = '',
     diffResult = null,
     annotationEntries = [],
     selectedAnnotationId = null,
@@ -322,8 +322,8 @@
   }
 
   onMount(() => {
-    if (content) {
-      initEditor(content);
+    if (initialContent) {
+      initEditor(initialContent);
     }
   });
 
@@ -342,37 +342,15 @@
     editor?.destroy();
   });
 
+  // Initialize editor if initialContent arrives after mount (async file load)
   $effect(() => {
-    const currentContent = content;
-
-    if (!currentContent) return;
-
-    if (!isReady && currentContent && editorRoot) {
-      initEditor(currentContent);
-      return;
-    }
-
-    if (isReady && editor && currentContent !== lastKnownContent) {
-      try {
-        isInternalUpdate = true;
-        editor.action(milkdownUtils.replaceAll(currentContent));
-        lastKnownContent = currentContent;
-        setTimeout(() => {
-          isInternalUpdate = false;
-          if (editor) {
-            triggerDiffUpdate(editor);
-            queueAnchorRefresh();
-          }
-        }, 0);
-      } catch (error) {
-        reportRuntimeError('editor_external_sync_failed', error);
-        isInternalUpdate = false;
-      }
+    if (!isReady && initialContent && editorRoot) {
+      initEditor(initialContent);
     }
   });
 
+  // Update decorations for low-frequency UI events (selection, lint, density)
   $effect(() => {
-    diffResult;
     selectedChangeId;
     slopLines;
     densityMode;
@@ -413,6 +391,26 @@
 
   export function refreshDiff() {
     if (!editor || !isReady) return;
+    try {
+      triggerDiffUpdate(editor);
+      queueAnchorRefresh();
+    } catch (error) {
+      reportRuntimeError('editor_diff_refresh_failed', error);
+    }
+  }
+
+  /** @param {string} newContent */
+  export function setContent(newContent) {
+    if (!editor || !isReady) return;
+    try {
+      isInternalUpdate = true;
+      editor.action(milkdownUtils.replaceAll(newContent));
+      lastKnownContent = newContent;
+    } catch (error) {
+      reportRuntimeError('editor_external_sync_failed', error);
+    } finally {
+      isInternalUpdate = false;
+    }
     try {
       triggerDiffUpdate(editor);
       queueAnchorRefresh();
