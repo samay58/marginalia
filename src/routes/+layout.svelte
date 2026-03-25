@@ -1,5 +1,7 @@
 <script>
   import '../app.css';
+  import 'dialkit/styles.css';
+  import { DialRoot } from 'dialkit/svelte';
   import { page } from '$app/stores';
 
   const REVIEW_PREFIX = '/review';
@@ -15,3 +17,4 @@
 </script>
 
 {@render children()}
+<DialRoot />
