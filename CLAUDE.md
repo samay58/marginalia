@@ -1,117 +1,143 @@
 # CLAUDE.md
 
-Working notes for coding agents in this repo.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Product shape
 
-Marginalia is a disposable review surface for agent-written drafts:
+Marginalia is a disposable macOS review surface for agent-written drafts:
 
 1. a hook notices a draft file,
 2. the app opens,
 3. the user edits inline and optionally saves rationales,
-4. the app writes a bundle,
+4. the app writes a 7-file bundle,
 5. the agent reads `summary_for_agent.md`.
 
-The desktop review model is:
+The desktop review model is a three-pane layout: change rail (left), manuscript editor (center), rationale surface (right). Compact layouts swap the rationale column for a popover.
 
-- left: stable change rail
-- center: manuscript editor
-- right: explicit rationale surface
-
-Selecting an edit is browse mode. Composing a rationale is explicit.
+Selecting an edit is browse mode. Composing a rationale is explicit (button or `Cmd+/`).
 
 ## Commands
 
 ```bash
 pnpm install
-pnpm dev
-pnpm tauri dev
-pnpm tauri:build:app
-pnpm tauri:build:dmg
-pnpm run check:diff
-pnpm run check:annotations
-pnpm run check:semantic
-pnpm run check:bundle
-pnpm run check:hook
-pnpm run check:lint
-pnpm run check
-pnpm run build
+pnpm dev              # marketing site only (localhost:1420)
+pnpm tauri dev        # desktop review app at /review (requires Rust toolchain)
+pnpm tauri:build:app  # build .app bundle
+pnpm tauri:build:dmg  # build DMG release artifact
 ```
 
-`pnpm check` is Svelte type checking. Behavior-specific regressions live in the `check:*` scripts.
+Validation (run all before shipping):
+
+```bash
+pnpm run check:diff         # diff ID retention
+pnpm run check:annotations  # annotation model invariants
+pnpm run check:semantic     # semantic diff correctness
+pnpm run check:bundle       # bundle artifact completeness
+pnpm run check:hook         # hook async queue behavior
+pnpm run check:lint         # lint model checks
+pnpm run check              # Svelte type checking (svelte-check)
+pnpm run build              # production frontend build
+```
+
+Each `check:*` script is a standalone regression test in `scripts/`. `pnpm run check` is Svelte type checking, not a test runner.
+
+## Tech stack
+
+- **Frontend**: SvelteKit 5 (Svelte 5 runes), adapter-static in SPA mode (no SSR)
+- **Desktop shell**: Tauri 2 (Rust). The Rust layer is intentionally thin: file I/O, bundle persistence, CLI arg parsing, window lifecycle. All review logic lives in the frontend.
+- **Editor**: Milkdown (ProseMirror-based markdown editor)
+- **Diffing**: `diff-match-patch` on rendered plain text, not raw markdown
+- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`
+- **Animations**: `motion` (Framer Motion for JS)
 
 ## Architecture
 
+### Route structure
+
+Two route groups under `src/routes/`:
+
+- `(marketing)/+page.svelte` serves the landing page at `/`
+- `review/+page.svelte` serves the desktop review app at `/review`
+
+The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `site` based on the current path. Tauri's window config points directly at `/review`.
+
+### Core data flow
+
+1. Rust reads the markdown file and exposes it via Tauri commands.
+2. The frontend stores original and edited markdown plus their plain-text projections (`src/lib/stores/app.js`).
+3. Diffing runs on the plain-text projections (what the user actually sees), not raw markdown.
+4. Annotations resolve against the latest diff using a conservative policy: exact match, heuristic reattachment, or stale.
+5. On finalize, the frontend generates the bundle and Rust persists it to disk.
+
 ### Primary files
 
-- `src/routes/review/+page.svelte`
-  Coordinates file loading, recovery, keyboard shortcuts, selection/composer state, and bundle finalization.
-- `src/lib/stores/app.js`
-  Holds document state, plain-text projections, diff state, and annotation records.
-- `src/lib/utils/diff.js`
-  Computes stable text changes from rendered plain text.
-- `src/lib/utils/annotations.js`
-  Defines durable annotation records, target metadata, reattachment scoring, and stale-note resolution.
-- `src/lib/utils/bundle.js`
-  Generates the review bundle. Current bundle format is `3.0`.
-- `src/lib/components/Editor.svelte`
-  Hosts Milkdown and renders persistent note markers from resolved annotations.
-- `src/lib/components/ChangeRail.svelte`
-  Displays visible changes only.
-- `src/lib/components/AnnotationColumn.svelte`
-  Renders the explicit rationale workflow for desktop.
-- `src/lib/components/AnnotationPopover.svelte`
-  Compact-layout rationale UI.
-- `src-tauri/src/lib.rs`
-  File I/O, bundle persistence, CLI args, and window lifecycle hooks.
+- `src/routes/review/+page.svelte` — app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
+- `src/lib/stores/app.js` — document state, plain-text projections, derived diff/annotation stores
+- `src/lib/utils/diff.js` — stable text diff with ID retention across edits
+- `src/lib/utils/annotations.js` — annotation records, target metadata, reattachment scoring, stale resolution
+- `src/lib/utils/bundle.js` — bundle generation (format `3.0`)
+- `src/lib/components/Editor.svelte` — Milkdown host, persistent note markers from resolved annotations
+- `src/lib/components/ChangeRail.svelte` — left-side change index (visible changes only)
+- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow
+- `src/lib/components/AnnotationPopover.svelte` — compact-layout rationale UI
+- `src-tauri/src/lib.rs` — native file/bundle I/O, CLI parsing, window commands
 
-### Current data model
+### Annotation model
 
-- `annotations` is an array of stable annotation records, not a map keyed by change ID.
-- Each annotation stores target metadata: prior change ID, excerpt, line context, and block key.
-- Resolution is conservative:
-  - exact change match first
-  - heuristic reattachment second
-  - otherwise mark the note `stale`
+- `annotations` is an array of stable records, not a map keyed by change ID.
+- Each record stores target metadata: prior change ID, excerpt, line context, block key.
+- Resolution is conservative: exact match first, heuristic reattachment second, otherwise `stale`.
 - Stale notes must never silently drift to a new edit.
 
-### Important behavior contracts
+### Session lifecycle
+
+- Sessions begin when a file is loaded. Autosave snapshots go to `~/.marginalia/sessions/`.
+- Recovery restores: content, plain-text projections, saved annotations, selection state, general notes, in-progress rationale drafts.
+- Finalizing writes a bundle and clears the active session marker.
+
+## Important behavior contracts
 
 - Diffs are computed from rendered plain text, not raw markdown.
 - Whitespace-only changes are filtered from the visible review surface.
 - Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets remain click-intercepted.
-- Selecting an edit must not focus or reopen the rationale composer by itself.
+- Selecting an edit must not focus or reopen the rationale composer.
 - Saved manuscript markers are keyed by stable annotation IDs and grouped by block, not mutable geometry buckets.
-- Recovery snapshots should preserve in-progress rationale drafts.
 
 ## Bundle contract
 
-Current bundle contents:
+Bundles are written to `~/.marginalia/bundles/[timestamp]_[filename]/`.
 
-- `original.md`
-- `final.md`
-- `changes.json`
-- `annotations.json`
+Contents:
+
+- `original.md`, `final.md`
+- `changes.json` (format `3.0`), `annotations.json` (schema `3.0`)
 - `changes.patch`
-- `provenance.json`
-- `summary_for_agent.md`
+- `provenance.json` (schema `1.0`)
+- `summary_for_agent.md` (primary agent input)
 
-`summary_for_agent.md` is the primary agent input. `annotations.json` is an array of annotation records with `status`, `matched_rule`, and target metadata.
+## Hook system
+
+`hooks/post-write.sh` is a Claude Code post-write hook with single-instance queueing.
+
+Trigger rules (default):
+- file ends with `-draft.md`
+- file contains `<!-- REVIEW -->`
+- `MARGINALIA_REVIEW_REGEX` env var overrides both
+
+Key env vars: `MARGINALIA_REVIEW_MODE` (sync/async), `MARGINALIA_QUEUE_DIR`, `MARGINALIA_BIN_OVERRIDE`.
+
+The hook enqueues requests and processes them one at a time. It writes a status JSON, then emits a hook response directing the agent to read `summary_for_agent.md`.
 
 ## Environment notes
 
-- Vite dev runs on port `1420` because Tauri points at it directly.
+- Vite dev server is hardcoded to port `1420` (Tauri expects it).
 - `src-tauri/tauri.conf.json` uses `"closable": true`; close interception happens in `+page.svelte` via `onCloseRequested`.
-- Version bumps must stay aligned across:
-  - `package.json`
-  - `src-tauri/Cargo.toml`
-  - `src-tauri/tauri.conf.json`
+- Version bumps must stay aligned across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 
 ## Docs
 
-Canonical docs live in:
-
-- [docs/README.md](/Users/samaydhawan/Projects/active/marginalia/docs/README.md)
-- [docs/architecture.md](/Users/samaydhawan/Projects/active/marginalia/docs/architecture.md)
-- [docs/reliability.md](/Users/samaydhawan/Projects/active/marginalia/docs/reliability.md)
-- [docs/maintainers/release.md](/Users/samaydhawan/Projects/active/marginalia/docs/maintainers/release.md)
+- `docs/README.md` — user-facing overview
+- `docs/architecture.md` — canonical implementation doc
+- `docs/reliability.md` — behavior contracts and validation runbook
+- `docs/maintainers/release.md` — release checklist
+- `docs/design/` — design exploration references

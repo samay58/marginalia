@@ -1,4 +1,4 @@
-> Historical design reference. Use [docs/architecture.md](/Users/samaydhawan/Projects/active/marginalia/docs/architecture.md) and [docs/reliability.md](/Users/samaydhawan/Projects/active/marginalia/docs/reliability.md) for the current product contract.
+> Historical design reference. Use [docs/architecture.md](../architecture.md) and [docs/reliability.md](../reliability.md) for the current product contract.
 
 # Marginalia Design Review
 

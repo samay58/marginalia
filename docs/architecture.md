@@ -2,7 +2,7 @@
 
 This is the canonical implementation doc for Marginalia.
 
-If you need release steps, read [docs/maintainers/release.md](/Users/samaydhawan/Projects/active/marginalia/docs/maintainers/release.md). If you need reliability guarantees, read [docs/reliability.md](/Users/samaydhawan/Projects/active/marginalia/docs/reliability.md).
+If you need release steps, read [docs/maintainers/release.md](maintainers/release.md). If you need reliability guarantees, read [docs/reliability.md](reliability.md).
 
 ## Product model
 

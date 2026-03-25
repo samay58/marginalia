@@ -145,10 +145,10 @@ Notes:
 
 ## Docs
 
-- [docs/README.md](/Users/samaydhawan/Projects/active/marginalia/docs/README.md)
-- [docs/architecture.md](/Users/samaydhawan/Projects/active/marginalia/docs/architecture.md)
-- [docs/reliability.md](/Users/samaydhawan/Projects/active/marginalia/docs/reliability.md)
-- [docs/maintainers/release.md](/Users/samaydhawan/Projects/active/marginalia/docs/maintainers/release.md)
+- [docs/README.md](docs/README.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/reliability.md](docs/reliability.md)
+- [docs/maintainers/release.md](docs/maintainers/release.md)
 
 ## License
 

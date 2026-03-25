@@ -18,7 +18,7 @@ Keep these three files aligned:
 2. `src-tauri/Cargo.toml`
 3. `src-tauri/tauri.conf.json`
 
-Update [CHANGELOG.md](/Users/samaydhawan/Projects/active/marginalia/CHANGELOG.md) in the same pass.
+Update [CHANGELOG.md](../../CHANGELOG.md) in the same pass.
 
 ## Verification before release
 
