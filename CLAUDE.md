@@ -65,20 +65,21 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 
 1. Rust reads the markdown file and exposes it via Tauri commands.
 2. The frontend stores original and edited markdown plus their plain-text projections (`src/lib/stores/app.js`).
-3. Diffing runs on the plain-text projections (what the user actually sees), not raw markdown.
-4. Annotations resolve against the latest diff using a conservative policy: exact match, heuristic reattachment, or stale.
-5. On finalize, the frontend generates the bundle and Rust persists it to disk.
+3. Typing updates `editedPlainText` immediately. Expensive derived stores (diff, annotation resolution) read from `debouncedEditedPlainText`, which lags by ~120ms to batch keystrokes.
+4. Diffing runs on the plain-text projections (what the user actually sees), not raw markdown.
+5. Annotations resolve against the latest diff using a conservative policy: exact match, heuristic reattachment, or stale.
+6. On finalize, the frontend generates the bundle and Rust persists it to disk.
 
 ### Primary files
 
 - `src/routes/review/+page.svelte` — app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
-- `src/lib/stores/app.js` — document state, plain-text projections, derived diff/annotation stores
+- `src/lib/stores/app.js` — document state, plain-text projections, debounced diff chain, trivial/substantive change split
 - `src/lib/utils/diff.js` — stable text diff with ID retention across edits
 - `src/lib/utils/annotations.js` — annotation records, target metadata, reattachment scoring, stale resolution
 - `src/lib/utils/bundle.js` — bundle generation (format `3.0`)
 - `src/lib/components/Editor.svelte` — Milkdown host, persistent note markers from resolved annotations
-- `src/lib/components/ChangeRail.svelte` — left-side change index (visible changes only)
-- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow
+- `src/lib/components/ChangeRail.svelte` — left-side change index: substantive changes shown with type icons, trivial edits collapsed at bottom
+- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow (headerless, minimal chrome)
 - `src/lib/components/AnnotationPopover.svelte` — compact-layout rationale UI
 - `src-tauri/src/lib.rs` — native file/bundle I/O, CLI parsing, window commands
 
@@ -94,6 +95,19 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 - Sessions begin when a file is loaded. Autosave snapshots go to `~/.marginalia/sessions/`.
 - Recovery restores: content, plain-text projections, saved annotations, selection state, general notes, in-progress rationale drafts.
 - Finalizing writes a bundle and clears the active session marker.
+
+## Change classification
+
+Changes are split into two tiers:
+
+- **Substantive**: more than one word, not punctuation-only. Shown prominently in the change rail with type icons (`+` insert, `-` delete, `~` replace) and the actual text.
+- **Trivial**: one word or fewer, or punctuation-only. Collapsed into an expandable "N minor edits" summary at the bottom of the rail.
+
+Both tiers are still visible in the editor inline and included in the bundle output. The classification only affects the rail.
+
+## Removed features
+
+Slop/lint matching (tone violations, WRITING.md ban patterns, the `linesWithSlop` store, `slopMatchers`, `SessionDrawer` lint column, `milkdown-slop-plugin`) was removed. The `writingRuleMatcher` for auto-tagging annotations with matched rules is kept.
 
 ## Important behavior contracts
 
