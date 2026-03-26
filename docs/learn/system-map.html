@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marginalia System Map</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: Charter, 'Bitstream Charter', Cambria, Georgia, serif;
+    background: #F7F3EE;
+    color: #2C2825;
+    padding: 2rem 2rem 4rem;
+    line-height: 1.6;
+  }
+
+  h1 {
+    font-family: 'Iowan Old Style', Palatino, Georgia, serif;
+    font-size: 1.8rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+
+  .subtitle {
+    font-size: 0.95rem;
+    color: #6B6560;
+    margin-bottom: 2.5rem;
+  }
+
+  .timeline {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+  }
+
+  .phase {
+    flex: 1;
+    min-width: 200px;
+    border: 1px solid #E8E2DA;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease;
+  }
+
+  .phase:not(:first-child) {
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .phase:not(:last-child) {
+    border-radius: 8px 0 0 8px;
+  }
+
+  .phase:not(:first-child):not(:last-child) {
+    border-radius: 0;
+  }
+
+  .phase:hover {
+    box-shadow: 0 2px 12px rgba(44, 40, 37, 0.08);
+  }
+
+  .phase-header {
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s ease;
+  }
+
+  .phase-header:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .phase.open .phase-header {
+    border-bottom-color: #E8E2DA;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .phase-number {
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    color: white;
+  }
+
+  .phase-title {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6B6560;
+  }
+
+  .phase-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #2C2825;
+  }
+
+  .phase-body {
+    display: none;
+    padding: 1rem;
+  }
+
+  .phase.open .phase-body {
+    display: block;
+  }
+
+  .phase-desc {
+    font-size: 0.9rem;
+    color: #6B6560;
+    margin-bottom: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .code-path {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.75rem;
+    color: #8C857B;
+    padding: 0.5rem 0.7rem;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 4px;
+    margin-bottom: 0.4rem;
+    line-height: 1.6;
+  }
+
+  .code-path strong {
+    color: #2C2825;
+    font-weight: 600;
+  }
+
+  .data-note {
+    font-size: 0.8rem;
+    color: #A0523D;
+    font-style: italic;
+    margin-top: 0.5rem;
+  }
+
+  .arrow-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    flex-shrink: 0;
+    color: #C17F24;
+    font-size: 1.2rem;
+    font-weight: 300;
+  }
+
+  /* Phase colors */
+  .phase-trigger .phase-number { background: #8C857B; }
+  .phase-launch .phase-number { background: #A0523D; }
+  .phase-init .phase-number { background: #C17F24; }
+  .phase-edit .phase-number { background: #3D7A68; }
+  .phase-annotate .phase-number { background: #5B6FA0; }
+  .phase-finalize .phase-number { background: #7A5B8C; }
+  .phase-handoff .phase-number { background: #2C2825; }
+
+  .legend {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.75rem;
+    color: #8C857B;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .trail-link {
+    display: inline-block;
+    margin-top: 0.6rem;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.75rem;
+    color: #C17F24;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .trail-link:hover {
+    border-bottom-color: #C17F24;
+  }
+
+  .user-sees {
+    font-size: 0.8rem;
+    color: #3D7A68;
+    margin-top: 0.5rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid #3D7A68;
+  }
+
+  @media (max-width: 900px) {
+    .timeline {
+      flex-direction: column;
+    }
+    .phase {
+      min-width: unset;
+      border-radius: 8px;
+      border: 1px solid #E8E2DA;
+    }
+    .phase:not(:first-child) { border-left: 1px solid #E8E2DA; }
+    .arrow-connector {
+      transform: rotate(90deg);
+      min-width: unset;
+      min-height: 28px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Marginalia System Map</h1>
+<p class="subtitle">Click any phase to see the code path. The full lifecycle flows left to right.</p>
+
+<div class="timeline">
+
+  <div class="phase phase-trigger" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">1</span>
+      <div>
+        <div class="phase-title">Trigger</div>
+        <div class="phase-label">Hook detects draft</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">Claude Code saves a file ending in <code>-draft.md</code>. The post-write hook fires.</p>
+      <div class="code-path">
+        <strong>hooks/post-write.sh</strong><br>
+        Pattern match: filename or content<br>
+        Enqueue request to /tmp/marginalia-review-queue/<br>
+        Acquire run lock (one instance at a time)<br>
+        Launch binary with CLI args
+      </div>
+      <p class="data-note">Key data: file path, bundle dir, principles path, out path</p>
+      <p class="user-sees">User sees: nothing. Hook runs silently.</p>
+      <a href="trail-0-full-loop.md#1-the-hook-fires" class="trail-link">Trail 0, Step 1</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-launch" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">2</span>
+      <div>
+        <div class="phase-title">Launch</div>
+        <div class="phase-label">Tauri opens window</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">The Rust binary parses CLI args into a CliOptions struct, stores them in app state, opens the web view at /review.</p>
+      <div class="code-path">
+        <strong>src-tauri/src/lib.rs</strong><br>
+        parse_cli_options(&amp;args) -> CliOptions<br>
+        app.manage(CliState { options })<br>
+        Window opens -> frontend loads
+      </div>
+      <p class="data-note">Rust exposes: read_file, write_file, save_bundle, get_home_dir, get_cli_options, close_window</p>
+      <p class="user-sees">User sees: Marginalia window appears.</p>
+      <a href="trail-0-full-loop.md#2-tauri-opens-and-reads-the-file" class="trail-link">Trail 0, Step 2</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-init" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">3</span>
+      <div>
+        <div class="phase-title">Initialize</div>
+        <div class="phase-label">Store + editor ready</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">Frontend fetches CLI options, reads the file via Rust, initializes stores, mounts the Milkdown editor. After first render, plaintext is captured.</p>
+      <div class="code-path">
+        <strong>+page.svelte</strong> onMount<br>
+        invoke('get_cli_options') -> invoke('read_file')<br>
+        <strong>app.js</strong> initializeWithContent(path, content)<br>
+        <strong>Editor.svelte</strong> initEditor() -> onInitialRender<br>
+        <strong>app.js</strong> setOriginalPlainText(text)
+      </div>
+      <p class="data-note">After this: originalPlainText = editedPlainText = debouncedEditedPlainText. Diff is empty.</p>
+      <p class="user-sees">User sees: the draft, loaded and ready to edit.</p>
+      <a href="trail-0-full-loop.md#3-the-store-initializes" class="trail-link">Trail 0, Steps 3-4</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-edit" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">4</span>
+      <div>
+        <div class="phase-title">Edit</div>
+        <div class="phase-label">Type, diff, rail updates</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">Each keystroke flows through a debounced reactive chain. The editor stays responsive while expensive diffing batches in the background.</p>
+      <div class="code-path">
+        <strong>Editor.svelte</strong> markdownUpdated listener<br>
+        -> onPlainTextChange(text)<br>
+        <strong>app.js</strong> updatePlainText(text)<br>
+        -> editedPlainText.set(text) [immediate]<br>
+        -> setTimeout(120ms)<br>
+        &nbsp;&nbsp;-> debouncedEditedPlainText.set(text)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;-> diffResult recomputes<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-> substantiveChanges / trivialChanges<br>
+        <strong>ChangeRail.svelte</strong> re-renders
+      </div>
+      <p class="data-note">Token-level diffing. Change IDs reconciled for annotation stability.</p>
+      <p class="user-sees">User sees: green/red highlights in text. Change rail populates.</p>
+      <a href="trail-1-edit-pipeline.md" class="trail-link">Trail 1: Full detail</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-annotate" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">5</span>
+      <div>
+        <div class="phase-title">Annotate</div>
+        <div class="phase-label">Rationale saved</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">Click a change, write a rationale. The annotation stores target metadata so it can survive future edits. Resolution runs on every diff update.</p>
+      <div class="code-path">
+        <strong>+page.svelte</strong> selectChange() -> handleStartCompose()<br>
+        <strong>annotations.js</strong> createAnnotationRecord()<br>
+        -> buildAnnotationTarget(change, editedText)<br>
+        &nbsp;&nbsp;Stores: changeId, excerpt, line, context, blockKey<br>
+        <strong>app.js</strong> resolvedAnnotations (derived)<br>
+        -> resolveAnnotations(): exact match / reattach / stale
+      </div>
+      <p class="data-note">Reattachment scoring: 60% excerpt, 18% line, 8% before, 8% after, +blockKey bonus, -distance penalty. Min 0.74, margin 0.12.</p>
+      <p class="user-sees">User sees: note badge in gutter. Annotation in right column.</p>
+      <a href="trail-2-annotations.md" class="trail-link">Trail 2: Full detail</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-finalize" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">6</span>
+      <div>
+        <div class="phase-title">Finalize</div>
+        <div class="phase-label">Bundle to disk</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">Press Escape or Cmd+Enter. The app computes a fresh diff, generates all 7 bundle files, saves them via Rust, writes a status JSON, closes.</p>
+      <div class="code-path">
+        <strong>+page.svelte</strong> handleDone()<br>
+        -> computeDiff() (fresh, not debounced)<br>
+        -> computeSemanticChanges()<br>
+        <strong>bundle.js</strong> generateBundle()<br>
+        -> 7 files: original.md, final.md, changes.json,<br>
+        &nbsp;&nbsp;annotations.json, changes.patch,<br>
+        &nbsp;&nbsp;provenance.json, summary_for_agent.md<br>
+        <strong>Rust</strong> save_bundle() -> write_file(status)
+      </div>
+      <p class="data-note">Bundle goes to ~/.marginalia/bundles/[timestamp]_[filename]/</p>
+      <p class="user-sees">User sees: window closes.</p>
+      <a href="trail-3-bundle.md" class="trail-link">Trail 3: Full detail</a>
+    </div>
+  </div>
+
+  <div class="arrow-connector">&rarr;</div>
+
+  <div class="phase phase-handoff" onclick="toggle(this)">
+    <div class="phase-header">
+      <span class="phase-number">7</span>
+      <div>
+        <div class="phase-title">Handoff</div>
+        <div class="phase-label">Agent reads summary</div>
+      </div>
+    </div>
+    <div class="phase-body">
+      <p class="phase-desc">The hook detects the status JSON, reads the bundle path, and emits a response directing the agent to summary_for_agent.md.</p>
+      <div class="code-path">
+        <strong>hooks/post-write.sh</strong><br>
+        Read status JSON -> extract bundle_path<br>
+        output_hook_response("Read feedback at:<br>
+        &nbsp;&nbsp;~/.marginalia/bundles/.../summary_for_agent.md")<br>
+        Agent reads summary, applies feedback, loop continues
+      </div>
+      <p class="data-note">summary_for_agent.md: changes count, feedback by priority, general notes.</p>
+      <p class="user-sees">User sees: they are back in their terminal. Agent is working.</p>
+      <a href="trail-0-full-loop.md#10-the-agent-reads-the-result" class="trail-link">Trail 0, Step 10</a>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#8C857B"></div> Hook / Shell</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#A0523D"></div> Rust / Tauri</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#C17F24"></div> Store / State</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3D7A68"></div> Edit Pipeline</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#5B6FA0"></div> Annotation Model</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7A5B8C"></div> Bundle Output</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2C2825"></div> Agent Handoff</div>
+</div>
+
+<script>
+function toggle(el) {
+  // Close others
+  document.querySelectorAll('.phase.open').forEach(p => {
+    if (p !== el) p.classList.remove('open');
+  });
+  el.classList.toggle('open');
+}
+</script>
+
+</body>
+</html>
