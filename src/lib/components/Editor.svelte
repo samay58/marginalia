@@ -6,19 +6,17 @@
   import * as milkdownUtils from '@milkdown/utils';
   import { createDiffPlugin, triggerDiffUpdate } from '../utils/milkdown-diff-plugin.js';
   import { historyKeymapPlugin, historyPlugin } from '../utils/milkdown-history-plugin.js';
-  import { createSlopPlugin, triggerSlopUpdate } from '../utils/milkdown-slop-plugin.js';
   import { buildTextMap } from '../utils/prosemirror-text.js';
   import { summarizeText } from '../utils/text.js';
 
   /** @typedef {{ annotationId: string, changeId: string, displayIndex: number, top: number, selected: boolean, preview: string }} AnchorMark */
 
-  /** @type {{ initialContent?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, slopLines?: Set<number>, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, getSlopMatchers?: () => any[], onRuntimeError?: (code: string, detail: string) => void }} */
+  /** @type {{ initialContent?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, onRuntimeError?: (code: string, detail: string) => void }} */
   let {
     initialContent = '',
     diffResult = null,
     annotationEntries = [],
     selectedAnnotationId = null,
-    slopLines = new Set(),
     selectedChangeId = null,
     densityMode = 'manuscript',
     onChange = () => {},
@@ -29,7 +27,6 @@
     onClickChange = () => {},
     onSelectAnchor = () => {},
     onScroll = () => {},
-    getSlopMatchers = () => [],
     onRuntimeError = () => {},
   } = $props();
 
@@ -258,7 +255,6 @@
         .use(historyKeymapPlugin)
         .use(listener)
         .use(createDiffPlugin(getDiffResult, onClickChange, () => selectedChangeId))
-        .use(createSlopPlugin(getSlopMatchers))
         .create();
 
       isReady = true;
@@ -349,10 +345,9 @@
     }
   });
 
-  // Update decorations for low-frequency UI events (selection, lint, density)
+  // Update decorations for low-frequency UI events (selection, density)
   $effect(() => {
     selectedChangeId;
-    slopLines;
     densityMode;
     if (isReady) {
       try {
@@ -416,16 +411,6 @@
       queueAnchorRefresh();
     } catch (error) {
       reportRuntimeError('editor_diff_refresh_failed', error);
-    }
-  }
-
-  export function refreshSlop() {
-    if (!editor || !isReady) return;
-    try {
-      triggerSlopUpdate(editor);
-      queueAnchorRefresh();
-    } catch (error) {
-      reportRuntimeError('editor_slop_refresh_failed', error);
     }
   }
 

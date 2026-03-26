@@ -3,12 +3,11 @@
 
   /** @typedef {import('../utils/diff.js').Change} Change */
 
-  /** @type {{ selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], lintFindings?: Array<any>, densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
+  /** @type {{ selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
   let {
     selectedChange = null,
     selectedAnnotationEntry = null,
     annotationEntries = [],
-    lintFindings = [],
     densityMode = 'manuscript',
     isComposing = false,
     composerDraft = '',
@@ -25,11 +24,6 @@
   /** @type {AnnotationEditor | null} */
   let editorRef = $state(null);
 
-  const relatedLintFindings = $derived.by(() => {
-    if (!selectedChange) return [];
-    return lintFindings.filter((finding) => finding.line === selectedChange.location.line).slice(0, 2);
-  });
-
   export function focusComposer() {
     editorRef?.focusEditor?.();
   }
@@ -39,27 +33,9 @@
   class="annotation-column glass-surface glass-surface-static"
   class:density-review={densityMode === 'review'}
 >
-  <header class="annotation-header">
-    <div>
-      <span class="annotation-kicker">Rationales</span>
-      <h2>Capture the human reason</h2>
-    </div>
-  </header>
-
   <div class="annotation-scroll">
     <section class="annotation-feature">
       {#if isComposing}
-        <div class="annotation-feature-meta">
-          <span class="annotation-badge">Composing</span>
-          <span class="annotation-line">
-            {#if selectedChange}
-              L{selectedChange.location.line}
-            {:else}
-              Note draft
-            {/if}
-          </span>
-        </div>
-
         <AnnotationEditor
           bind:this={editorRef}
           excerpt={selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || ''}
@@ -73,19 +49,9 @@
           onRemove={onRemoveSelected}
         />
       {:else if selectedAnnotationEntry?.status === 'stale'}
-        <div class="annotation-feature-meta">
-          <span class="annotation-badge stale">Stale note</span>
-          <span class="annotation-line">Needs confirmation</span>
-        </div>
-
-        <div class="annotation-summary-card stale">
-          <p class="annotation-summary-copy">{selectedAnnotationEntry.annotation.rationale}</p>
-          {#if selectedAnnotationEntry.annotation.target.excerpt}
-            <p class="annotation-summary-meta">Last target: “{selectedAnnotationEntry.annotation.target.excerpt}”</p>
-          {/if}
-          <p class="annotation-summary-meta">
-            This note no longer maps cleanly to a single edit.
-          </p>
+        <div class="stale-card">
+          <span class="stale-badge">Stale note</span>
+          <p class="rationale-text">{selectedAnnotationEntry.annotation.rationale}</p>
         </div>
 
         <div class="annotation-actions-row">
@@ -114,36 +80,9 @@
           </button>
         </div>
       {:else if selectedChange}
-        <div class="annotation-feature-meta">
-          <span class="annotation-badge">
-            {selectedAnnotationEntry ? 'Saved note' : 'Selected edit'}
-          </span>
-          <span class="annotation-line">L{selectedChange.location.line}</span>
-        </div>
-
-        <div class="annotation-summary-card">
-          <p class="annotation-summary-excerpt">“{selectedChange.text}”</p>
-          {#if selectedAnnotationEntry}
-            <p class="annotation-summary-copy">{selectedAnnotationEntry.annotation.rationale}</p>
-            {#if selectedAnnotationEntry.annotation.matchedRule}
-              <p class="annotation-summary-meta">Matches WRITING.md: {selectedAnnotationEntry.annotation.matchedRule}</p>
-            {/if}
-          {:else}
-            <p class="annotation-summary-meta">
-              No rationale saved yet. Add one only when the why matters downstream.
-            </p>
-          {/if}
-        </div>
-
-        {#if relatedLintFindings.length > 0}
-          <div class="annotation-inline-notes">
-            {#each relatedLintFindings as finding}
-              <div class="annotation-inline-note">
-                <span>{finding.label}</span>
-                <p>{finding.snippet}</p>
-              </div>
-            {/each}
-          </div>
+        <p class="excerpt-text">"{selectedChange.text}"</p>
+        {#if selectedAnnotationEntry}
+          <p class="rationale-text">{selectedAnnotationEntry.annotation.rationale}</p>
         {/if}
 
         <div class="annotation-actions-row">
@@ -165,17 +104,14 @@
           {/if}
         </div>
       {:else}
-        <div class="annotation-empty-state">
-          <p>Select an edit from the rail to review it.</p>
-          <span>Use ⌘/ only when you actually want to write a rationale.</span>
-        </div>
+        <p class="empty-hint">Select an edit to review it.</p>
       {/if}
     </section>
 
     <section class="annotation-section">
       <div class="section-heading">Saved notes</div>
       {#if annotationEntries.length === 0}
-        <p class="section-empty">No rationales yet. Keep the important ones; skip the obvious.</p>
+        <p class="section-empty">No rationales yet.</p>
       {:else}
         <div class="note-stack">
           {#each annotationEntries as entry}
@@ -197,8 +133,6 @@
                 <span class="note-line">
                   {#if entry.status === 'active' && entry.change}
                     L{entry.change.location.line}
-                  {:else}
-                    Needs review
                   {/if}
                 </span>
               </div>
@@ -221,12 +155,22 @@
     background: color-mix(in srgb, var(--glass-bg-static) 96%, transparent);
   }
 
-  .annotation-header {
-    padding: var(--space-5) var(--space-5) var(--space-4);
-    border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 86%, transparent);
+  .annotation-scroll {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-5) var(--space-5) var(--space-10);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
   }
 
-  .annotation-kicker,
+  .annotation-feature,
+  .annotation-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
   .section-heading,
   .note-label {
     display: inline-flex;
@@ -241,111 +185,53 @@
     font-weight: 600;
   }
 
-  .annotation-header h2 {
-    margin-top: 0.45rem;
-    font-family: var(--font-display);
-    font-size: 1.2rem;
-    color: var(--ink);
-    letter-spacing: -0.01em;
-  }
-
-  .annotation-scroll {
-    flex: 1;
-    overflow: auto;
-    padding: var(--space-5);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-  }
-
-  .annotation-feature,
-  .annotation-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .annotation-feature-meta,
-  .note-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-  }
-
-  .annotation-badge,
-  .annotation-line,
   .note-line {
     font-family: var(--font-ui);
     font-size: var(--text-ui-small);
     color: var(--ink-ghost);
   }
 
-  .annotation-badge.stale {
-    color: color-mix(in srgb, var(--delete-ink) 88%, var(--ink));
+  .excerpt-text {
+    font-family: var(--font-body);
+    font-size: var(--text-annotation);
+    line-height: 1.5;
+    color: var(--annotation-ink);
+    font-style: italic;
   }
 
-  .annotation-empty-state,
-  .annotation-summary-card {
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-    background: color-mix(in srgb, var(--paper-bright) 58%, transparent);
-  }
-
-  .annotation-summary-card.stale {
-    border-color: color-mix(in srgb, var(--delete-line) 58%, transparent);
-    background: color-mix(in srgb, var(--delete-bg) 32%, var(--paper-bright));
-  }
-
-  .annotation-empty-state p,
-  .annotation-summary-excerpt,
-  .annotation-summary-copy,
-  .note-card p,
-  .annotation-inline-note p {
+  .rationale-text,
+  .note-card p {
     font-family: var(--font-body);
     font-size: var(--text-annotation);
     line-height: 1.5;
     color: var(--annotation-ink);
   }
 
-  .annotation-summary-excerpt {
-    font-style: italic;
-  }
-
-  .annotation-summary-copy {
-    margin-top: 0.65rem;
-  }
-
-  .annotation-empty-state span,
-  .section-empty,
-  .annotation-summary-meta {
-    display: block;
-    margin-top: 0.45rem;
+  .empty-hint,
+  .section-empty {
     font-family: var(--font-ui);
     font-size: var(--text-ui-small);
     color: var(--ink-ghost);
     line-height: 1.45;
   }
 
-  .annotation-inline-notes,
+  .stale-card {
+    border: 1px solid color-mix(in srgb, var(--delete-line) 58%, transparent);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    background: color-mix(in srgb, var(--delete-bg) 32%, var(--paper-bright));
+  }
+
+  .stale-badge {
+    font-family: var(--font-ui);
+    font-size: var(--text-ui-small);
+    color: color-mix(in srgb, var(--delete-ink) 88%, var(--ink));
+  }
+
   .note-stack {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-  }
-
-  .annotation-inline-note {
-    border-top: 1px solid color-mix(in srgb, var(--paper-edge) 78%, transparent);
-    padding-top: var(--space-2);
-  }
-
-  .annotation-inline-note span {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--slop-ink);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 
   .annotation-actions-row {
@@ -411,7 +297,13 @@
     border-color: color-mix(in srgb, var(--delete-line) 52%, transparent);
   }
 
-  .density-review .annotation-header,
+  .note-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
   .density-review .annotation-scroll {
     padding-left: var(--space-4);
     padding-right: var(--space-4);

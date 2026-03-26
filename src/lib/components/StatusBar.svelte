@@ -1,8 +1,7 @@
 <script>
-  /** @type {{ editCount?: number, slopCount?: number, annotationCount?: number, autosaveLabel?: string, degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
+  /** @type {{ editCount?: number, annotationCount?: number, autosaveLabel?: string, degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
   let {
     editCount = 0,
-    slopCount = 0,
     annotationCount = 0,
     autosaveLabel = '',
     degradedMode = false,
@@ -21,7 +20,6 @@
 <footer class="status-bar glass-surface glass-surface-focal">
   <div class="status-summary">
     <span>{editCount} edit{editCount === 1 ? '' : 's'}</span>
-    <span>{slopCount} slop hint{slopCount === 1 ? '' : 's'}</span>
     <span>{annotationCount} annotation{annotationCount === 1 ? '' : 's'}</span>
   </div>
 

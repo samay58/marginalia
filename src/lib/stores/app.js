@@ -1,8 +1,9 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { computeDiff, groupChanges, getLinesWithChanges, summarizeChanges } from '../utils/diff.js';
 import {
   createAnnotationId,
   isVisibleChange,
+  isTrivialChange,
   normalizeAnnotationRecord,
   resolveAnnotations,
   sortResolvedAnnotations,
@@ -62,11 +63,16 @@ export const originalPlainText = writable('');
 /** @type {import('svelte/store').Writable<string>} */
 export const editedPlainText = writable('');
 
+/** Debounced copy of editedPlainText for expensive derived stores (diff, annotation resolution) */
+/** @type {import('svelte/store').Writable<string>} */
+export const debouncedEditedPlainText = writable('');
+
+/** @type {ReturnType<typeof setTimeout> | null} */
+let debounceTimer = null;
+const DIFF_DEBOUNCE_MS = 120;
+
 /** @type {import('svelte/store').Writable<AnnotationRecord[]>} */
 export const annotations = writable([]);
-
-/** @type {import('svelte/store').Writable<Array<{ label: string, pattern: string, flags: string }>>} */
-export const slopMatchers = writable([]);
 
 /** @type {import('svelte/store').Writable<string>} */
 export const generalNotes = writable('');
@@ -89,7 +95,7 @@ let previousOriginalForSnapshot = '';
 
 /** Computed diff between original and edited PLAIN TEXT (what user sees) */
 export const diffResult = derived(
-  [originalPlainText, editedPlainText],
+  [originalPlainText, debouncedEditedPlainText],
   ([$originalText, $editedText]) => {
     // Wait until both stores have content (avoid race condition during initialization)
     if (!$originalText || !$editedText) {
@@ -131,10 +137,25 @@ export const hasChanges = derived(
   ([$original, $edited]) => $original !== $edited
 );
 
-/** Diff changes that are actually rendered in the UI */
+/** Diff changes that are actually rendered in the UI (non-whitespace) */
 export const visibleChanges = derived(diffResult, ($diff) => {
   if (!$diff) return [];
   return $diff.changes.filter(isVisibleChange);
+});
+
+/** Substantive changes (visible minus trivial single-word edits) */
+export const substantiveChanges = derived(visibleChanges, ($changes) => {
+  return $changes.filter((change) => !isTrivialChange(change));
+});
+
+/** Count of trivial changes filtered from the rail */
+export const trivialChangeCount = derived(visibleChanges, ($changes) => {
+  return $changes.filter((change) => isTrivialChange(change)).length;
+});
+
+/** The trivial changes themselves (for expand view) */
+export const trivialChanges = derived(visibleChanges, ($changes) => {
+  return $changes.filter((change) => isTrivialChange(change));
 });
 
 /** Grouped changes for display */
@@ -166,7 +187,7 @@ export const selectedChange = derived(
 
 /** Saved annotations resolved against the current diff */
 export const resolvedAnnotations = derived(
-  [annotations, diffResult, editedPlainText],
+  [annotations, diffResult, debouncedEditedPlainText],
   ([$annotations, $diff, $editedText]) => {
     if (!$annotations || $annotations.length === 0) return [];
     return sortResolvedAnnotations(resolveAnnotations($annotations, $diff, $editedText || ''));
@@ -208,31 +229,6 @@ export const selectedAnnotation = derived(
   }
 );
 
-/** Lines that violate tone or WRITING.md bans */
-export const linesWithSlop = derived(
-  [editedPlainText, slopMatchers],
-  ([$text, $matchers]) => {
-    if (!$text || !$matchers || $matchers.length === 0) return new Set();
-    const lines = $text.split(/\r?\n/);
-    const result = new Set();
-    const compiled = $matchers.map((matcher) => ({
-      label: matcher.label,
-      regex: new RegExp(matcher.pattern, matcher.flags),
-    }));
-    lines.forEach((line, index) => {
-      for (const matcher of compiled) {
-        if (!matcher?.regex) continue;
-        matcher.regex.lastIndex = 0;
-        if (matcher.regex.test(line)) {
-          result.add(index + 1);
-          break;
-        }
-      }
-    });
-    return result;
-  }
-);
-
 // Actions
 
 /**
@@ -251,6 +247,7 @@ export function initializeWithContent(path, content) {
   // Plain text will be set after editor renders
   originalPlainText.set('');
   editedPlainText.set('');
+  debouncedEditedPlainText.set('');
   annotations.set([]);
   generalNotes.set('');
   startTime.set(new Date());
@@ -324,6 +321,7 @@ export function restoreFromSnapshot(snapshot) {
   editedContent.set(restoredEdited);
   originalPlainText.set(restoredOriginalPlain);
   editedPlainText.set(restoredEditedPlain);
+  debouncedEditedPlainText.set(restoredEditedPlain);
   annotations.set(restoredAnnotations);
   generalNotes.set(snapshot.generalNotes || '');
   startTime.set(snapshot.startedAt ? new Date(snapshot.startedAt) : new Date());
@@ -342,14 +340,21 @@ export function restoreFromSnapshot(snapshot) {
 export function setOriginalPlainText(text) {
   originalPlainText.set(text);
   editedPlainText.set(text);
+  debouncedEditedPlainText.set(text);
 }
 
 /**
- * Update the edited plain text (called on each edit)
+ * Update the edited plain text (called on each edit).
+ * Sets editedPlainText immediately (editor needs it) and debounces
+ * the expensive derived chain (diff, annotation resolution).
  * @param {string} text
  */
 export function updatePlainText(text) {
   editedPlainText.set(text);
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debouncedEditedPlainText.set(text);
+  }, DIFF_DEBOUNCE_MS);
 }
 
 /**
@@ -358,14 +363,6 @@ export function updatePlainText(text) {
  */
 export function updateContent(content) {
   editedContent.set(content);
-}
-
-/**
- * Update slop matchers used for WRITING.md violations
- * @param {Array<{ label: string, pattern: string, flags: string }>} matchers
- */
-export function setSlopMatchers(matchers) {
-  slopMatchers.set(matchers || []);
 }
 
 /**
@@ -435,6 +432,8 @@ export function reset() {
   editedContent.set('');
   originalPlainText.set('');
   editedPlainText.set('');
+  debouncedEditedPlainText.set('');
+  if (debounceTimer) clearTimeout(debounceTimer);
   annotations.set([]);
   generalNotes.set('');
   startTime.set(new Date());

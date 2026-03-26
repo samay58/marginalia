@@ -11,9 +11,7 @@
   import ReferencePane from '$lib/components/ReferencePane.svelte';
   import SessionDrawer from '$lib/components/SessionDrawer.svelte';
   import StatusBar from '$lib/components/StatusBar.svelte';
-  import { createViolationMatchers, createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
-  import { createToneMatchers } from '$lib/utils/tone-lint.js';
-  import { collectLintFindings } from '$lib/utils/lint.js';
+  import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
     filePath,
@@ -26,13 +24,11 @@
     annotations,
     annotationEntries,
     annotatedChangeIds,
-    slopMatchers,
     startTime,
     initializeWithContent,
     restoreFromSnapshot,
     updateContent,
     updateGeneralNotes,
-    setSlopMatchers,
     addAnnotation,
     updateAnnotation,
     removeAnnotation,
@@ -43,6 +39,9 @@
     selectedChangeId,
     selectedChange,
     selectedAnnotation,
+    substantiveChanges,
+    trivialChanges,
+    trivialChangeCount,
     visibleChanges,
     setSelectedChange,
     clearSelectedChange,
@@ -113,11 +112,6 @@
   let cliOutPath = $state('');
   let cliPrinciplesPath = $state('');
   let cliInitialPath = $state('');
-  /** @type {Array<import('$lib/utils/lint.js').LintMatcher>} */
-  let allLintMatchers = $state([]);
-  let toneLintEnabled = $state(true);
-  /** @type {Set<string>} */
-  let mutedLintRuleIds = $state(new Set());
   /** @type {'review' | 'manuscript'} */
   let densityMode = $state('manuscript');
   /** @type {null | ((rationale: string) => string | null)} */
@@ -157,16 +151,7 @@
   const REF_STORAGE_KEY = 'marginalia.references';
   const DENSITY_STORAGE_KEY = 'marginalia.density';
 
-  const liveLintFindings = $derived.by(() =>
-    collectLintFindings($editedPlainText || $editedContent || '', $slopMatchers, {
-      maxPerRule: 3,
-      maxTotal: 12,
-    })
-  );
-
-  const mutedLintCount = $derived.by(() => mutedLintRuleIds.size);
   const editCount = $derived.by(() => $visibleChanges?.length ?? 0);
-  const slopLines = $derived.by(() => new Set(liveLintFindings.map((finding) => finding.line)));
   const statusAutosaveLabel = $derived.by(() => getAutosaveLabel());
   const selectedAnnotationEntry = $derived.by(() => {
     if (selectedAnnotationId) {
@@ -175,46 +160,6 @@
     return $selectedAnnotation || null;
   });
 
-  /**
-   * @param {import('$lib/utils/lint.js').LintMatcher} matcher
-   */
-  function resolveLintRuleId(matcher) {
-    if (matcher.id) return matcher.id;
-    const safeLabel = (matcher.label || 'rule')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const safeCategory = (matcher.category || 'lint').toLowerCase();
-    return `${safeCategory}.${safeLabel}`;
-  }
-
-  function applyLintMatcherFilters() {
-    const filtered = allLintMatchers
-      .filter((matcher) => {
-        if (!toneLintEnabled && matcher.category === 'tone') {
-          return false;
-        }
-        const ruleId = resolveLintRuleId(matcher);
-        if (mutedLintRuleIds.has(ruleId)) {
-          return false;
-        }
-        return true;
-      })
-      .map((matcher) => ({
-        ...matcher,
-        flags: matcher.flags || 'g',
-      }));
-    setSlopMatchers(filtered);
-    editorRef?.refreshSlop?.();
-  }
-
-  /**
-   * @param {Array<import('$lib/utils/lint.js').LintMatcher>} matchers
-   */
-  function setAllLintMatchers(matchers) {
-    allLintMatchers = Array.isArray(matchers) ? matchers : [];
-    applyLintMatcherFilters();
-  }
 
   /**
    * Build a JSON status object for the hook to parse
@@ -510,7 +455,6 @@
     // If editor is already mounted, push new content explicitly
     editorRef?.setContent?.(content);
     await activateSession(createSessionId());
-    editorRef?.refreshSlop();
   }
 
   // Sample content for testing (when no CLI file is provided)
@@ -560,8 +504,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         cliOutPath = cliOptions?.outPath || '';
         cliPrinciplesPath = cliOptions?.principlesPath || '';
         await ensureHomeDir();
-        // Always enable built-in tone lint. If a principles file is provided, extend matchers with it.
-        setAllLintMatchers(createToneMatchers());
         if (cliPrinciplesPath) {
           await loadWritingRules(cliPrinciplesPath);
         }
@@ -586,7 +528,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       } catch (e) {
         console.error('Error loading file:', e);
         // Fallback to sample content
-        setAllLintMatchers(createToneMatchers());
         degradedMode = false;
         degradedReasons = [];
         initializeWithContent('/test/draft.md', sampleContent);
@@ -730,18 +671,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       const rulesText = await invoke('read_file', { path: principlesPath });
       const matcher = createWritingRuleMatcher(rulesText);
       writingRuleMatcher = matcher.match;
-      const matchers = createViolationMatchers(rulesText);
-      const toneMatchers = createToneMatchers();
-      setAllLintMatchers([...matchers, ...toneMatchers]);
-      editorRef?.refreshSlop();
       if (!cliPrinciplesPath) {
         cliPrinciplesPath = principlesPath;
       }
     } catch (e) {
       console.warn('WRITING.md not available for rule matching:', e);
-      const toneMatchers = createToneMatchers();
-      setAllLintMatchers(toneMatchers);
-      editorRef?.refreshSlop();
     }
   }
 
@@ -948,7 +882,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     // setContent already calls triggerDiffUpdate internally.
     const restoredContent = snapshot.edited_content || snapshot.original_content || '';
     editorRef?.setContent?.(restoredContent);
-    editorRef?.refreshSlop?.();
   }
 
   async function discardRecoveredSession() {
@@ -1033,7 +966,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       semanticChanges = [];
     }
 
-    const lintFindings = collectLintFindings(editedTextForDiff, $slopMatchers);
+    /** @type {import('$lib/utils/lint.js').LintFinding[]} */
+    const lintFindings = [];
     const degradedSummary = getDegradedSummaryNote();
     const mergedGeneralNotes = [$generalNotes, degradedSummary]
       .map((entry) => (entry || '').trim())
@@ -1169,10 +1103,17 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   /** @param {number} x @param {number} y */
   function positionPopoverAt(x, y) {
     const margin = 16;
-    const maxX = window.innerWidth - 384 - margin;
-    const maxY = window.innerHeight - 350;
+    const popoverWidth = 384;
+    const estimatedHeight = 320;
+    const maxX = window.innerWidth - popoverWidth - margin;
     popoverX = Math.min(Math.max(margin, x), maxX);
-    popoverY = Math.min(Math.max(80, y), maxY);
+
+    const spaceBelow = window.innerHeight - y - margin;
+    if (spaceBelow >= estimatedHeight) {
+      popoverY = Math.max(80, y);
+    } else {
+      popoverY = Math.max(margin, y - estimatedHeight - margin);
+    }
   }
 
   function toggleSessionDrawer() {
@@ -1443,26 +1384,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     updateGeneralNotes(event.currentTarget.value);
   }
 
-  /** @param {Event & { currentTarget: HTMLInputElement }} event */
-  function handleToneLintToggle(event) {
-    toneLintEnabled = event.currentTarget.checked;
-    applyLintMatcherFilters();
-  }
-
-  /** @param {string} ruleId */
-  function ignoreLintRuleForSession(ruleId) {
-    if (!ruleId) return;
-    const next = new Set(mutedLintRuleIds);
-    next.add(ruleId);
-    mutedLintRuleIds = next;
-    applyLintMatcherFilters();
-  }
-
-  function clearIgnoredLintRules() {
-    mutedLintRuleIds = new Set();
-    applyLintMatcherFilters();
-  }
-
   /**
    * @param {string} code
    * @param {string} detail
@@ -1624,10 +1545,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   <main class="desk" class:compact={compactLayout}>
     <ChangeRail
-      changes={$visibleChanges}
+      changes={$substantiveChanges}
+      trivialChanges={$trivialChanges}
+      trivialCount={$trivialChangeCount}
       annotationChangeIds={$annotatedChangeIds}
       annotationCount={$annotationEntries.length}
-      slopLines={slopLines}
       selectedChangeId={$selectedChangeId}
       currentLine={$currentLine}
       onSelectChange={handleRailChangeSelect}
@@ -1640,7 +1562,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         diffResult={$diffResult}
         annotationEntries={$annotationEntries}
         selectedAnnotationId={selectedAnnotationId}
-        slopLines={slopLines}
         selectedChangeId={$selectedChangeId}
         {densityMode}
         onChange={handleContentChange}
@@ -1650,7 +1571,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         getDiffResult={() => $diffResult}
         onClickChange={handleEditorChangeClick}
         onSelectAnchor={handleAnchorSelect}
-        getSlopMatchers={() => $slopMatchers}
         onRuntimeError={handleEditorRuntimeError}
       />
     </div>
@@ -1662,7 +1582,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
           selectedChange={$selectedChange}
           selectedAnnotationEntry={selectedAnnotationEntry}
           annotationEntries={$annotationEntries}
-          lintFindings={liveLintFindings}
           {densityMode}
           isComposing={composerOpen}
           composerDraft={composerDraft}
@@ -1701,18 +1620,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <SessionDrawer
     open={notesExpanded}
     generalNotes={$generalNotes}
-    {toneLintEnabled}
-    liveLintFindings={liveLintFindings}
-    {mutedLintCount}
     onNotesInput={handleNotesChange}
-    onToneLintToggle={handleToneLintToggle}
-    onIgnoreLintRule={ignoreLintRuleForSession}
-    onClearIgnored={clearIgnoredLintRules}
   />
 
   <StatusBar
     {editCount}
-    slopCount={liveLintFindings.length}
     annotationCount={$annotationEntries.length}
     autosaveLabel={statusAutosaveLabel}
     {degradedMode}
@@ -1947,7 +1859,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     display: grid;
     grid-template-columns: var(--desk-rail-width) minmax(0, 1fr) var(--desk-right-width);
     gap: var(--desk-gap);
-    padding: var(--space-10) var(--desk-padding-x) 0;
+    padding: var(--space-10) var(--desk-padding-x) var(--space-4);
     overflow: hidden;
   }
 

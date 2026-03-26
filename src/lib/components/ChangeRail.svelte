@@ -4,21 +4,26 @@
    * @typedef {import('../utils/diff.js').DiffResult} DiffResult
    */
 
-  import { summarizeText } from '../utils/text.js';
-
-  /** @type {{ changes?: Change[], annotationChangeIds?: Set<string>, annotationCount?: number, slopLines?: Set<number>, selectedChangeId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void }} */
+  /** @type {{ changes?: Change[], trivialChanges?: Change[], trivialCount?: number, annotationChangeIds?: Set<string>, annotationCount?: number, selectedChangeId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void }} */
   let {
     changes = [],
+    trivialChanges = [],
+    trivialCount = 0,
     annotationChangeIds = new Set(),
     annotationCount = 0,
-    slopLines = new Set(),
     selectedChangeId = null,
     currentLine = /** @type {number | null} */ (1),
     onSelectChange = () => {},
   } = $props();
 
+  let trivialExpanded = $state(false);
+
   const sortedChanges = $derived.by(() => {
     return [...changes].sort((left, right) => left.editedOffset - right.editedOffset);
+  });
+
+  const sortedTrivial = $derived.by(() => {
+    return [...trivialChanges].sort((left, right) => left.editedOffset - right.editedOffset);
   });
 
   const insertionCount = $derived.by(
@@ -29,9 +34,25 @@
     () => sortedChanges.filter((change) => change.type === 'deletion').length
   );
 
-  /** @param {string} text */
-  function summarize(text) {
-    return summarizeText(text, 48, '(whitespace change)');
+  /**
+   * @param {Change} change
+   * @returns {string}
+   */
+  function typeIcon(change) {
+    if (change.type === 'deletion') return '\u2212';
+    if (change.type === 'insertion') return '+';
+    return '~';
+  }
+
+  /**
+   * @param {string} text
+   * @param {number} max
+   * @returns {string}
+   */
+  function truncate(text, max) {
+    const trimmed = text.trim();
+    if (trimmed.length <= max) return trimmed;
+    return trimmed.slice(0, max) + '\u2026';
   }
 
   /**
@@ -40,36 +61,6 @@
   function isNearCursor(change) {
     const line = typeof currentLine === 'number' ? currentLine : 1;
     return Math.abs((change.location?.line ?? 1) - line) <= 1;
-  }
-
-  /**
-   * @param {Change} change
-   */
-  function labelFor(change) {
-    const excerpt = change.text.trim();
-    if (slopLines.has(change.location.line)) {
-      return excerpt ? 'Flagged phrasing' : 'Slop pattern';
-    }
-
-    if (change.type === 'deletion') {
-      if (excerpt.length > 70) {
-        return 'Cut overwriting';
-      }
-      return 'Trimmed language';
-    }
-
-    if (excerpt.length > 70) {
-      return 'Added sharper detail';
-    }
-    return 'Refined phrasing';
-  }
-
-  /**
-   * @param {Change} change
-   */
-  function markerTone(change) {
-    if (slopLines.has(change.location.line)) return 'slop';
-    return change.type === 'deletion' ? 'deletion' : 'insertion';
   }
 
   /**
@@ -91,26 +82,24 @@
       <div class="rail-tallies">
         <span>{sortedChanges.length} edits</span>
         <span>{annotationCount} noted</span>
-        <span>{slopLines.size} flagged</span>
       </div>
     </div>
     <div class="rail-counts" aria-label="Change counts">
       <span class="count-pill insertion">+{insertionCount}</span>
-      <span class="count-pill deletion">-{deletionCount}</span>
+      <span class="count-pill deletion">&minus;{deletionCount}</span>
     </div>
   </header>
 
-  {#if sortedChanges.length === 0}
+  {#if sortedChanges.length === 0 && trivialCount === 0}
     <div class="empty-state">
       <p>No edits yet. Start editing to populate the review index.</p>
     </div>
   {:else}
     <ol class="change-list">
-      {#each sortedChanges as change, index}
+      {#each sortedChanges as change}
         {@const annotated = annotationChangeIds.has(change.id)}
         {@const nearCursor = isNearCursor(change)}
         {@const selected = selectedChangeId === change.id}
-        {@const tone = markerTone(change)}
         <li>
           <button
             type="button"
@@ -121,22 +110,43 @@
             aria-pressed={selected}
             onclick={(event) => handleSelect(event, change)}
           >
-            <div class="change-row-top">
-              <div class="change-title">
-                <span class="marker" class:deletion={tone === 'deletion'} class:insertion={tone === 'insertion'} class:slop={tone === 'slop'}></span>
-                <span>{labelFor(change)}</span>
-              </div>
-              <div class="change-meta">
-                <span class="change-index">{index + 1}</span>
-                {#if annotated}
-                  <span class="annotation-indicator">Note</span>
-                {/if}
-              </div>
-            </div>
-            <p class="change-preview">{summarize(change.text)}</p>
+            <span class="type-icon" class:deletion={change.type === 'deletion'} class:insertion={change.type === 'insertion'}>{typeIcon(change)}</span>
+            <span class="change-text">{truncate(change.text, 40)}</span>
+            {#if annotated}
+              <span class="annotation-dot"></span>
+            {/if}
           </button>
         </li>
       {/each}
+
+      {#if trivialCount > 0}
+        <li class="trivial-row">
+          <button
+            type="button"
+            class="trivial-toggle control-motion control-focus"
+            onclick={() => trivialExpanded = !trivialExpanded}
+          >
+            {trivialExpanded ? 'Hide' : `${trivialCount} minor edit${trivialCount === 1 ? '' : 's'}`}
+          </button>
+        </li>
+        {#if trivialExpanded}
+          {#each sortedTrivial as change}
+            {@const selected = selectedChangeId === change.id}
+            <li>
+              <button
+                type="button"
+                class="change-item trivial control-motion control-focus"
+                class:selected
+                aria-pressed={selected}
+                onclick={(event) => handleSelect(event, change)}
+              >
+                <span class="type-icon" class:deletion={change.type === 'deletion'} class:insertion={change.type === 'insertion'}>{typeIcon(change)}</span>
+                <span class="change-text">{truncate(change.text, 40)}</span>
+              </button>
+            </li>
+          {/each}
+        {/if}
+      {/if}
     </ol>
   {/if}
 </aside>
@@ -238,9 +248,13 @@
     text-align: left;
     background: transparent;
     border: none;
-    border-radius: var(--radius-xl);
-    padding: 0.7rem 0;
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0;
     cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    min-width: 0;
   }
 
   .change-item:hover {
@@ -248,87 +262,83 @@
   }
 
   .change-item.selected {
-    padding-left: 0.65rem;
-    padding-right: 0.65rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
     background: color-mix(in srgb, var(--paper-bright) 50%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: var(--radius-xl);
   }
 
   .change-item.near-cursor:not(.selected) {
-    padding-left: 0.45rem;
+    padding-left: 0.35rem;
   }
 
   .change-item.annotated:not(.selected) {
     color: var(--annotation-ink);
   }
 
-  .change-row-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
+  .change-item.trivial {
+    opacity: 0.6;
   }
 
-  .change-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-width: 0;
-    font-family: var(--font-ui);
-    font-size: 0.6875rem;
-    line-height: 1.3;
-    color: var(--annotation-ink);
+  .type-icon {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
     font-weight: 600;
-  }
-
-  .marker {
-    flex-shrink: 0;
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--ink-ghost);
-  }
-
-  .marker.deletion {
-    background: var(--delete-ink);
-  }
-
-  .marker.insertion {
-    background: var(--insert-ink);
-  }
-
-  .marker.slop {
-    background: var(--slop-ink);
-  }
-
-  .change-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-shrink: 0;
-  }
-
-  .change-index,
-  .annotation-indicator {
-    font-family: var(--font-ui);
-    font-size: 0.625rem;
-    line-height: 1.2;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    line-height: 1;
+    width: 1rem;
+    text-align: center;
     color: var(--ink-ghost);
   }
 
-  .annotation-indicator {
-    color: var(--accent);
+  .type-icon.deletion {
+    color: var(--delete-ink);
   }
 
-  .change-preview {
-    margin-top: 0.2rem;
-    padding-left: 0.65rem;
+  .type-icon.insertion {
+    color: var(--insert-ink);
+  }
+
+  .change-text {
     font-family: var(--font-body);
     font-size: 0.75rem;
     line-height: 1.35;
-    font-style: italic;
-    color: var(--annotation-muted);
+    color: var(--annotation-ink);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .annotation-dot {
+    flex-shrink: 0;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    margin-left: auto;
+  }
+
+  .trivial-row {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
+  }
+
+  .trivial-toggle {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0.3rem 0;
+    font-family: var(--font-ui);
+    font-size: var(--text-ui-small);
+    color: var(--ink-ghost);
+    cursor: pointer;
+  }
+
+  .trivial-toggle:hover {
+    color: var(--ink-faded);
   }
 </style>

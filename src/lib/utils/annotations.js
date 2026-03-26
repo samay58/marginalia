@@ -164,6 +164,30 @@ export function buildAnnotationTarget(change, editedText) {
 }
 
 /**
+ * Build annotation target using pre-split lines array (avoids repeated splits).
+ * @param {Change} change
+ * @param {string[]} lines
+ * @returns {AnnotationTarget}
+ */
+function buildAnnotationTargetFromLines(change, lines) {
+  const lineNumber = change.location?.line || 1;
+  const safeLine = clampLineNumber(lineNumber, lines.length);
+  const beforeLine = lines[safeLine - 2] || '';
+  const lineText = lines[safeLine - 1] || '';
+  const afterLine = lines[safeLine] || '';
+  return {
+    changeId: change.id,
+    type: change.type === 'deletion' || change.type === 'insertion' ? change.type : null,
+    excerpt: change.text || '',
+    line: safeLine,
+    beforeLine,
+    lineText,
+    afterLine,
+    blockKey: hashText([beforeLine, lineText, afterLine].join('\n')),
+  };
+}
+
+/**
  * @returns {string}
  */
 export function createAnnotationId() {
@@ -215,6 +239,23 @@ export function reanchorAnnotation(annotation, change, editedText) {
 export function isVisibleChange(change) {
   const candidate = /** @type {{ text?: string } | null} */ (change && typeof change === 'object' ? change : null);
   return !!candidate?.text && candidate.text.trim().length > 0;
+}
+
+const PUNCTUATION_ONLY = /^[\s\p{P}\p{S}]+$/u;
+
+/**
+ * A change is trivial if its text is one word or fewer, or punctuation-only.
+ * @param {unknown} change
+ * @returns {boolean}
+ */
+export function isTrivialChange(change) {
+  const candidate = /** @type {{ text?: string } | null} */ (change && typeof change === 'object' ? change : null);
+  if (!candidate?.text) return true;
+  const trimmed = candidate.text.trim();
+  if (!trimmed) return true;
+  if (PUNCTUATION_ONLY.test(trimmed)) return true;
+  const words = trimmed.split(/\s+/);
+  return words.length <= 1;
 }
 
 /**
@@ -279,9 +320,10 @@ function scoreDescriptorMatch(target, descriptor) {
  */
 export function resolveAnnotations(annotations, diffResult, editedText) {
   const visibleChanges = (diffResult?.changes || []).filter(isVisibleChange);
+  const lines = String(editedText || '').split(/\r?\n/);
   const descriptors = visibleChanges.map((change) => ({
     change,
-    target: buildAnnotationTarget(change, editedText),
+    target: buildAnnotationTargetFromLines(change, lines),
   }));
 
   return (annotations || []).map((annotation) => {
