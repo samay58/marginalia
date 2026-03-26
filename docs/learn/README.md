@@ -40,6 +40,18 @@ Trails trace a concrete action through the code. Each one starts with something 
 - [Trail 3: The Bundle](trail-3-bundle.md) (~6 min)
   What ships to the agent. Every file in the bundle, what it contains, why.
 
+## Reference
+
+When you need to look up a specific function or store, use the reference docs. These cover every exported function with purpose, inputs, outputs, design choices, and connections.
+
+Trails tell you the story. Reference is the dictionary.
+
+- [ref/ref-app-store.md](ref/ref-app-store.md) -- The reactive state layer. Every store, every derived store, every action function. Start here if you want to understand how data flows.
+
+- [ref/ref-diff-engine.md](ref/ref-diff-engine.md) -- The diff algorithm. Tokenization, encoding, diff-match-patch, ID reconciliation. Start here if you want to understand how changes are detected.
+
+- [ref/ref-annotations.md](ref/ref-annotations.md) -- The annotation model. Creating, resolving, reattaching, stale detection. Start here if you want to understand how rationales survive across edits.
+
 ## How to use this
 
 **Before a session**: glance at the napkin sketch or the visual map. Orient yourself to where we will be working.
