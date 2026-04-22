@@ -3,10 +3,14 @@
   import 'dialkit/styles.css';
   import { DialRoot } from 'dialkit/svelte';
   import { page } from '$app/stores';
+  import { preferences } from '$lib/stores/preferences.js';
 
   const REVIEW_PREFIX = '/review';
+  const VITE_DIALKIT = import.meta.env.VITE_DIALKIT === '1';
 
   let { children } = $props();
+
+  const showDialkit = $derived(VITE_DIALKIT || $preferences.showDialkitHandle);
 
   $effect(() => {
     if (typeof document === 'undefined') return;
@@ -26,4 +30,6 @@
 </svelte:head>
 
 {@render children()}
-<DialRoot />
+{#if showDialkit}
+  <DialRoot />
+{/if}

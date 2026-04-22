@@ -62,6 +62,8 @@
   import { computeDiff } from '$lib/utils/diff.js';
   import { computeSemanticChanges } from '$lib/utils/semantic-diff.js';
   import { DialStore } from 'dialkit/store';
+  import { get } from 'svelte/store';
+  import { preferences } from '$lib/stores/preferences.js';
 
   // DialKit: live-tunable desk layout parameters
   const DESK_PANEL_ID = 'review-desk';
@@ -500,15 +502,23 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
-    // DialKit: register panel and subscribe for live CSS updates
-    DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
-    applyDeskValues();
-    const unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
+    // DialKit: register panel and subscribe only when the live-tuning handle is enabled
+    const dialkitEnabled =
+      import.meta.env.VITE_DIALKIT === '1' || get(preferences).showDialkitHandle;
+    /** @type {null | (() => void)} */
+    let unsubDesk = null;
+    if (dialkitEnabled) {
+      DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
+      applyDeskValues();
+      unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
+    }
 
     if (!tauriAvailable) {
       return () => {
-        unsubDesk();
-        DialStore.unregisterPanel(DESK_PANEL_ID);
+        if (dialkitEnabled) {
+          if (unsubDesk) unsubDesk();
+          DialStore.unregisterPanel(DESK_PANEL_ID);
+        }
       };
     }
 
@@ -615,8 +625,10 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     return () => {
       cleanup();
-      unsubDesk();
-      DialStore.unregisterPanel(DESK_PANEL_ID);
+      if (dialkitEnabled) {
+        if (unsubDesk) unsubDesk();
+        DialStore.unregisterPanel(DESK_PANEL_ID);
+      }
     };
   });
 
