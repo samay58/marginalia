@@ -510,7 +510,7 @@
     background: var(--paper);
     border-left: 1px solid var(--chrome-shadow);
     box-shadow: inset 1px 0 0 var(--chrome-highlight);
-    padding: 40px 392px 60px 64px;
+    padding: 40px 72px 60px 72px;
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -540,7 +540,6 @@
 
   .editor-frame {
     position: relative;
-    width: min(100%, calc(var(--content-max-width) + var(--gutter-width) + 2rem));
     margin: 0 auto;
     padding-top: var(--space-12);
     padding-bottom: var(--space-12);
@@ -552,7 +551,6 @@
 
   .editor-surface {
     margin-left: var(--gutter-width);
-    max-width: var(--content-max-width);
     min-height: 100%;
   }
 
