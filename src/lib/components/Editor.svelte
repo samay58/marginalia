@@ -462,7 +462,7 @@
 </script>
 
 <div
-  class="editor-shell"
+  class="editor-shell manuscript-host v2-manuscript"
   class:density-review={densityMode === 'review'}
   class:density-manuscript={densityMode === 'manuscript'}
   bind:this={editorShell}
@@ -503,6 +503,39 @@
     flex: 1;
     overflow: auto;
     padding-bottom: var(--space-12);
+  }
+
+  .manuscript-host {
+    flex: 1;
+    background: var(--paper);
+    border-left: 1px solid var(--chrome-shadow);
+    box-shadow: inset 1px 0 0 var(--chrome-highlight);
+    padding: 40px 392px 60px 64px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  :global(.v2-manuscript .ProseMirror) {
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 28px;
+    color: var(--ink);
+  }
+  :global(.v2-manuscript .ProseMirror h1) {
+    font-family: var(--font-h);
+    font-size: 38px;
+    line-height: 46px;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+  :global(.v2-manuscript .ProseMirror h2) {
+    font-family: var(--font-h);
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 700;
+    margin: 28px 0 14px 0;
+  }
+  :global(.v2-manuscript .ProseMirror p) {
+    margin-bottom: 28px;
   }
 
   .editor-frame {
