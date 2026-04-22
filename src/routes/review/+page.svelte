@@ -1677,7 +1677,16 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   />
   </div>
 
-  <BottomShortcutBar edits={editCount} annotations={$annotationEntries.length} saved={autosaveState === 'saved' || autosaveState === 'idle'} />
+  <BottomShortcutBar
+    edits={editCount}
+    annotations={$annotationEntries.length}
+    saved={autosaveState === 'saved' || autosaveState === 'idle'}
+    onNotes={toggleSessionDrawer}
+    onRationale={handleAnnotationShortcut}
+    onAddRef={toggleReferenceSurface}
+    onUndo={() => { try { document.execCommand('undo'); } catch {} }}
+    onDone={handleDone}
+  />
 </WindowFrame>
 {/if}
 

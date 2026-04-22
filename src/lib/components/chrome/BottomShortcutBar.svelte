@@ -2,16 +2,25 @@
   import Keycap from './Keycap.svelte';
   import StatusLED from './StatusLED.svelte';
 
-  /** @type {{ edits: number, annotations: number, saved: boolean }} */
-  let { edits, annotations, saved } = $props();
+  /** @type {{
+   *   edits: number,
+   *   annotations: number,
+   *   saved: boolean,
+   *   onNotes?: () => void,
+   *   onRationale?: () => void,
+   *   onAddRef?: () => void,
+   *   onUndo?: () => void,
+   *   onDone?: () => void
+   * }} */
+  let { edits, annotations, saved, onNotes, onRationale, onAddRef, onUndo, onDone } = $props();
 
-  const shortcuts = [
-    { keys: '⌘ G', label: 'notes' },
-    { keys: '⌘ /', label: 'rationale' },
-    { keys: '⌘ ⇧ O', label: 'add ref' },
-    { keys: '⌘ Z', label: 'undo' },
-    { keys: 'ESC', label: 'done' }
-  ];
+  const shortcuts = $derived([
+    { keys: '⌘ G', label: 'notes', fn: onNotes },
+    { keys: '⌘ /', label: 'rationale', fn: onRationale },
+    { keys: '⌘ ⇧ O', label: 'add ref', fn: onAddRef },
+    { keys: '⌘ Z', label: 'undo', fn: onUndo },
+    { keys: 'ESC', label: 'done', fn: onDone }
+  ]);
 </script>
 
 <div class="bar">
@@ -23,7 +32,7 @@
   <div class="spacer"></div>
   <div class="shortcuts">
     {#each shortcuts as s}
-      <Keycap keys={s.keys} label={s.label} />
+      <Keycap keys={s.keys} label={s.label} onClick={s.fn} />
     {/each}
   </div>
 </div>
