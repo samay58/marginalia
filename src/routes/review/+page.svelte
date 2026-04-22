@@ -152,6 +152,28 @@
   let snapshotPath = $state('');
   let activeSessionStatePath = $state('');
   let autosaveState = $state('idle');
+  /** Wall-clock timestamp in ms when the last save completed; drives the
+   *  sticky-green LED for STICKY_SAVED_MS afterward. */
+  let lastSavedAt = $state(0);
+  const STICKY_SAVED_MS = 2000;
+  let savedTick = $state(0);
+  $effect(() => {
+    // Keep the LED green for STICKY_SAVED_MS after lastSavedAt, then tick to
+    // revert. Reads lastSavedAt as a dep so it resets on every save.
+    if (!lastSavedAt) return;
+    const elapsed = Date.now() - lastSavedAt;
+    const remaining = STICKY_SAVED_MS - elapsed;
+    if (remaining <= 0) return;
+    const id = setTimeout(() => { savedTick++; }, remaining + 20);
+    return () => clearTimeout(id);
+  });
+  const ledSaved = $derived.by(() => {
+    savedTick; // dependency only, no read value
+    if (autosaveState === 'saving') return false;
+    if (autosaveState === 'error') return false;
+    if (!lastSavedAt) return autosaveState === 'saved' || autosaveState === 'idle';
+    return Date.now() - lastSavedAt < STICKY_SAVED_MS;
+  });
   let isHydratingSnapshot = $state(false);
   let hasInitialDocument = $state(false);
   let degradedMode = $state(false);
@@ -375,6 +397,7 @@
       });
       await writeActiveSessionState(true, 'autosave');
       autosaveState = 'saved';
+      lastSavedAt = Date.now();
     } catch (e) {
       autosaveState = 'error';
       console.error('Autosave failed:', e);
@@ -1699,7 +1722,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <BottomShortcutBar
     edits={editCount}
     annotations={$annotationEntries.length}
-    saved={autosaveState === 'saved' || autosaveState === 'idle'}
+    saved={ledSaved}
     onNotes={toggleSessionDrawer}
     onRationale={handleAnnotationShortcut}
     onAddRef={toggleReferenceSurface}
