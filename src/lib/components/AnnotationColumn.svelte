@@ -57,6 +57,9 @@
 
   <div class="rat-body">
     <SunkenWell pad="18px 16px">
+      {#if !isComposing && !selectedChange && !selectedAnnotationEntry && annotationEntries.length === 0}
+        <p class="rat-empty">No rationales yet.</p>
+      {:else}
       <div class="rat-feature">
         {#if isComposing}
           <AnnotationEditor
@@ -164,6 +167,7 @@
           </div>
         {/if}
       </div>
+      {/if}
     </SunkenWell>
   </div>
 
