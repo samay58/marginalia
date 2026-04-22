@@ -52,5 +52,6 @@ cp "$ICONSET/icon_128x128.png"      "$OUT_DIR/128x128.png"
 cp "$ICONSET/icon_128x128@2x.png"   "$OUT_DIR/128x128@2x.png"
 
 rm -f "$TRIMMED"
+rm -rf "$ICONSET"
 
 echo "ok: icon assets regenerated under $OUT_DIR"
