@@ -1,6 +1,10 @@
 <script>
-  /** @type {{ breadcrumb: Array<{ label: string, active?: boolean }>, nav: string[] }} */
-  let { breadcrumb, nav } = $props();
+  /** @type {{
+   *   breadcrumb: Array<{ label: string, active?: boolean }>,
+   *   onHelp?: () => void,
+   *   onPreferences?: () => void
+   * }} */
+  let { breadcrumb, onHelp, onPreferences } = $props();
 </script>
 
 <div class="header">
@@ -14,10 +18,9 @@
     {/each}
   </nav>
   <div class="nav">
-    {#each nav as item, i}
-      {#if i > 0}<span class="pipe">|</span>{/if}
-      <a href="#" class="link">{item}</a>
-    {/each}
+    <button type="button" class="nav-link" onclick={onHelp}>Help</button>
+    <span class="pipe">|</span>
+    <button type="button" class="nav-link" onclick={onPreferences}>Preferences</button>
   </div>
 </div>
 
@@ -62,7 +65,7 @@
     font-family: var(--font-chrome);
     font-size: 13px;
     font-weight: 500;
-    color: var(--link);
+    color: var(--muted);
   }
   .crumb.active {
     color: var(--ink);
@@ -80,14 +83,17 @@
     padding: 0 24px;
     flex-shrink: 0;
   }
-  .link {
+  .nav-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
     font-family: var(--font-chrome);
     font-size: 13px;
     font-weight: 500;
     color: var(--link);
-    text-decoration: none;
+    cursor: pointer;
   }
-  .link:hover {
+  .nav-link:hover {
     text-decoration: underline;
   }
   .pipe {

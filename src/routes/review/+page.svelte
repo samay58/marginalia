@@ -134,7 +134,8 @@
     { label: 'Product Brief' },
     { label: 'Draft Review', active: true }
   ];
-  const nav = ['Help', 'Preferences', 'Sign Out'];
+  let helpOpen = $state(false);
+  let preferencesOpen = $state(false);
   /** @type {null | ((rationale: string) => string | null)} */
   let writingRuleMatcher = $state(null);
   /** @type {null | (() => void)} */
@@ -1530,7 +1531,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 {:else}
 <WindowFrame>
   <TitleBar title="Marginalia — Draft Review" />
-  <AppHeader {breadcrumb} {nav} />
+  <AppHeader
+    {breadcrumb}
+    onHelp={() => (helpOpen = true)}
+    onPreferences={() => (preferencesOpen = true)}
+  />
   <TabStrip
     tabs={[{ id: 'review', label: 'Review' }, { id: 'manuscript', label: 'Manuscript' }]}
     activeId={$tabMode}
