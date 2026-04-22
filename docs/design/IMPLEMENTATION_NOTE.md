@@ -197,3 +197,32 @@ Run `pnpm tauri dev` and walk through the 16-item checklist in the polish-pass p
 - The `.control-focus` / `.control-motion` / `.control-raise` utility classes are referenced across 5+ components but never defined anywhere in the codebase. Added a scoped `:focus-visible` rule locally in AnnotationEditor; longer term, these utilities should either be defined centrally in `chrome.css` or removed from the templates that reference them.
 - AnnotationPopover (compact-layout compose surface under 1100px) is still v1 styling; restyle in a follow-up pass.
 - `box-sizing: border-box` on Milkdown/ProseMirror global rule is redundant with the global `* { box-sizing: border-box }` reset — harmless defensive duplication.
+
+---
+
+## Polish pass 3 — 2026-04-22
+
+**Plan:** `docs/superpowers/plans/2026-04-22-v2-polish-pass-3.md`
+
+### Landed
+- **Rationale panel fits** (Phase A). `.rat-toolbar` padding `0 10px → 0 6px`, `.rat-body` padding `12px → 10px`, inner SunkenWell pad `18px 16px → 14px 12px`, `.rat-section` margin-top `16 → 12`. Remove / Cancel / Update rationale now fit inline within the 352px rationale column.
+- **Manuscript seam tightened** (Phase B). `.manuscript-host` horizontal padding `72px → 48px`. Parchment text still breathes but the column reads as a continuation of the rail, not a dead band of background.
+- **DialKit gating confirmed** (Phase C). `<DialRoot />` already conditional in `+layout.svelte`; `DialStore.registerPanel` already gated in `+page.svelte`. Prior-session visibility was a persisted `localStorage` preference. Reset via DevTools console: `localStorage.removeItem('marginalia.preferences.v1'); location.reload();`.
+- **Rail-click path verified** (Phase D / Task 5). `handleRailChangeSelect` already routes insertions and deletions uniformly through `selectChange`. No code change; user can click the "+" row in the rail to attach a rationale to an insertion.
+- **Alt-click on manuscript insertions** (Phase D / Task 6). Extended the diff plugin's `handleClick` to intercept insertion clicks only when `event.altKey === true`. Bare clicks still behave as normal text editing per the CLAUDE.md invariant. Insertion decorations now carry `title="⌥-click to annotate"` for discoverability.
+- **New app icon** (Phase E). `scripts/build-icons.sh` trims the source and generates canonical macOS sizes + `.icns`. Replaces `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns` under `src-tauri/icons/`. Windows `.ico` left unchanged. Script is idempotent and cleans up its intermediate iconset.
+
+### Regression gate (all green)
+- `pnpm run check:diff` ✓
+- `pnpm run check:annotations` ✓
+- `pnpm run check:semantic` ✓
+- `pnpm run check:bundle` ✓
+- `pnpm run check:hook` ✓
+- `pnpm run check:lint` ✓
+- `pnpm run build` ✓
+- `pnpm run check` ✓ (2 pre-existing errors, 0 warnings — unchanged)
+
+### Known follow-ups
+- `.ico` Windows icon not regenerated — out of scope. Rebuild from the same source if Windows is ever a target.
+- The OS caches app icons; after the next `pnpm tauri:build:app`, you may need `touch /Applications/Marginalia.app` or a Finder relaunch to see the new icon in the dock.
+- The Task-2-conditional "shorten labels to Save/Update" was NOT applied — leaving in reserve until human visual check confirms if Remove/Cancel/Update rationale still clips at narrower widths.
