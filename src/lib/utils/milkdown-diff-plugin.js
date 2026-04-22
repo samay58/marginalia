@@ -109,6 +109,7 @@ function createDiffDecorations(doc, textMap, diffResult, selectedChangeId, onCli
             'data-change-id': change.id,
             'data-change-text': change.text,
             'data-change-type': 'insertion',
+            title: '⌥-click to annotate',
           })
         );
       }
@@ -175,7 +176,12 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
             const changeText = changeEl.dataset?.changeText;
             const changeType = changeEl.dataset?.changeType;
 
-            if (changeType !== 'deletion') {
+            // Deletions always intercept the click (they are widget-only,
+            // not editable). Insertions intercept ONLY on Alt/Option-click so
+            // bare clicks keep their normal text-editing behavior.
+            const isDeletion = changeType === 'deletion';
+            const isInsertionAltClick = changeType === 'insertion' && event.altKey;
+            if (!isDeletion && !isInsertionAltClick) {
               return false;
             }
 
