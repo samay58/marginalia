@@ -32,6 +32,21 @@
   --led-highlight: #C7E8CB;
   --rationale-well-bg: #F5F2E4;
 
+  /* --- Legacy .desk grid aliases --------------------------------------------
+     The pre-v2 review surface drove its three-column grid from --desk-* tokens
+     that lived in the old app.css. Phase 2 removed app.css and those tokens,
+     which silently invalidated the grid-template-columns value in
+     src/routes/review/+page.svelte and collapsed the Rationale panel under
+     the rail + editor. Restoring the tokens as aliases onto v2 values fixes
+     alignment without restructuring the grid.
+     -------------------------------------------------------------------- */
+  --desk-rail-width: var(--rail-w);
+  --desk-right-width: var(--rationale-w);
+  --desk-gap: 0px;
+  --desk-padding-x: 0px;
+  --header-height: var(--appheader-h);
+  --status-bar-height: var(--bottombar-h);
+
   /* --- Revision marks (chip-family muted) --------------------------------- */
   --insert-ink: #2B4E35;
   --insert-bg: rgba(61, 107, 74, 0.12);
