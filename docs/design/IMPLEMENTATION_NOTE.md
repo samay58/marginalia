@@ -169,3 +169,31 @@ Run `pnpm tauri dev` and walk through the 16-item checklist in the polish-pass p
 - Undo keycap uses `document.execCommand('undo')`; swap for a Milkdown undo API call when exposed.
 - Preferences persists to `localStorage`; Tauri fs-backed storage is a follow-up if prefs grow to multi-user.
 
+
+---
+
+## Polish pass 2 — 2026-04-22
+
+**Plan:** `docs/superpowers/plans/2026-04-22-v2-polish-pass-2.md`
+
+### Landed
+- **Grid alignment restored** (Task 1). Added `--desk-rail-width`, `--desk-right-width`, `--desk-gap`, `--desk-padding-x`, `--header-height`, `--status-bar-height` aliases in `tokens.css` pointing at v2 values. The `.desk` grid + reference-drawer offsets compute correctly again. Rationale panel sits in the third column, not stacked under the first two.
+- **AnnotationEditor restyled** (Task 2 + follow-up fix). Excerpt, textarea, and Remove / Cancel / Save buttons all use v2 chrome: inset sunken textarea, chip-family buttons (green Save, red Remove, neutral Cancel). Focus-visible outline added locally (the codebase-wide `.control-focus` utility class is a pre-existing orphan — noted as a follow-up).
+- **Sticky SAVED LED** (Task 3). A 2-second hold on each `autosaveState === 'saved'` transition, driven by `lastSavedAt` timestamp and a re-evaluating `$effect` that bumps a `savedTick` counter when the window expires. LED acknowledges saves even on near-instant autosaves.
+- **Editor column pinned to 100% width** (Task 4). `.editor-column > *` forced to `width: 100%; min-width: 0`, plus `.manuscript-host` and `.ProseMirror` guarded. Eliminates the flex-centered intrinsic-width thrash that caused caret jumps on keystroke.
+
+### Regression gate (all green)
+- `pnpm run check:diff` ✓
+- `pnpm run check:annotations` ✓
+- `pnpm run check:semantic` ✓
+- `pnpm run check:bundle` ✓
+- `pnpm run check:hook` ✓
+- `pnpm run check:lint` ✓
+- `pnpm run build` ✓
+
+`pnpm run check` remains at 2 pre-existing errors + 0 warnings.
+
+### Known follow-ups (new / carried)
+- The `.control-focus` / `.control-motion` / `.control-raise` utility classes are referenced across 5+ components but never defined anywhere in the codebase. Added a scoped `:focus-visible` rule locally in AnnotationEditor; longer term, these utilities should either be defined centrally in `chrome.css` or removed from the templates that reference them.
+- AnnotationPopover (compact-layout compose surface under 1100px) is still v1 styling; restyle in a follow-up pass.
+- `box-sizing: border-box` on Milkdown/ProseMirror global rule is redundant with the global `* { box-sizing: border-box }` reset — harmless defensive duplication.
