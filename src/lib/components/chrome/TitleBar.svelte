@@ -1,6 +1,5 @@
 <script>
   import TrafficLight from './TrafficLight.svelte';
-  import WindowControl from './WindowControl.svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   /** @type {{ title: string }} */
@@ -36,12 +35,6 @@
         <span class:dark={i % 2 === 1}></span>
       {/each}
     </div>
-  </div>
-
-  <div class="controls">
-    <WindowControl kind="minimize" onClick={minimize} />
-    <WindowControl kind="maximize" onClick={zoom} />
-    <WindowControl kind="close" onClick={close} />
   </div>
 </div>
 
@@ -93,13 +86,6 @@
     color: var(--chrome-highlight);
     padding: 0 8px;
     white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0 4px;
     flex-shrink: 0;
   }
 </style>
