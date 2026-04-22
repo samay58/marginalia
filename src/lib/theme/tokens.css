@@ -1,0 +1,85 @@
+/* =============================================================================
+   MARGINALIA V2 DESIGN TOKENS
+   Locked to docs/design/DESIGN_REFERENCE.md. Do not override inline.
+   ============================================================================= */
+
+:root {
+  /* --- Colors ------------------------------------------------------------- */
+  --desktop-ground: #2E6E65;
+  --window-body: #E8E4D5;
+  --paper: #ECE3C8;
+  --navy-chrome: #1B2B5E;
+  --navy-shadow: #0B1230;
+  --wordmark-teal: #1F7A6E;
+  --chrome-highlight: #F5F2E4;
+  --chrome-shadow: #6B6A62;
+  --deep-shadow: #1A1612;
+  --button-face: #C9C3B0;
+  --tab-inactive: #C9C3B0;
+  --ink: #1A1612;
+  --muted: #5B5A55;
+  --link: #1B3EAC;
+  --traffic-red: #E35145;
+  --traffic-yellow: #E0B137;
+  --traffic-blue: #3B6FCF;
+  --chip-green-bg: #CEE2C2;
+  --chip-green-border: #3D6B4A;
+  --chip-green-text: #2B4E35;
+  --chip-red-bg: #E8C4C4;
+  --chip-red-border: #8A3838;
+  --chip-red-text: #8A3838;
+  --led-green: #58A667;
+  --led-highlight: #C7E8CB;
+  --rationale-well-bg: #F5F2E4;
+
+  /* --- Typography --------------------------------------------------------- */
+  --font-chrome: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-wordmark: "EB Garamond", Palatino, Georgia, serif;
+  --font-h: "Old Standard TT", "Source Serif 4", Georgia, serif;
+  --font-body: "IM Fell English", "Old Standard TT", Georgia, serif;
+
+  /* --- Spacing scale ------------------------------------------------------ */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4-5: 18px;
+  --space-6: 24px;
+  --space-9: 36px;
+  --space-16: 64px;
+
+  /* --- Layout metrics ----------------------------------------------------- */
+  --window-pad: 32px;
+  --titlebar-h: 50px;
+  --appheader-h: 58px;
+  --tabstrip-h: 38px;
+  --bottombar-h: 50px;
+  --rail-w: 244px;
+  --rationale-w: 352px;
+  --rationale-inset: 12px;
+
+  /* --- Bevel recipes ------------------------------------------------------ */
+  --bevel-raised-1:
+    inset 1px 1px 0 var(--chrome-highlight),
+    inset -1px -1px 0 var(--chrome-shadow);
+  --bevel-sunken-1:
+    inset 1px 1px 0 var(--chrome-shadow),
+    inset -1px -1px 0 var(--chrome-highlight);
+  --bevel-window-2:
+    inset 2px 2px 0 var(--chrome-highlight),
+    inset -2px -2px 0 var(--chrome-shadow),
+    0 0 0 1px var(--deep-shadow);
+  --bevel-raised-chip:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.6),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.15);
+
+  /* --- Text colors (role-indexed) ----------------------------------------- */
+  --text-body: var(--ink);
+  --text-muted: var(--muted);
+  --text-link: var(--link);
+  --text-chrome-on-navy: var(--chrome-highlight);
+}
