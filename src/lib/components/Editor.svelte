@@ -512,7 +512,7 @@
     background: var(--paper);
     border-left: 1px solid var(--chrome-shadow);
     box-shadow: inset 1px 0 0 var(--chrome-highlight);
-    padding: 40px 72px 60px 72px;
+    padding: 40px 48px 60px 48px;
     overflow-y: auto;
     overflow-x: hidden;
   }
