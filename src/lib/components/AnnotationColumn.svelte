@@ -56,7 +56,7 @@
   </div>
 
   <div class="rat-body">
-    <SunkenWell pad="18px 16px">
+    <SunkenWell pad="14px 12px">
       {#if !isComposing && !selectedChange && !selectedAnnotationEntry && annotationEntries.length === 0}
         <p class="rat-empty">No rationales yet.</p>
       {:else}
@@ -264,7 +264,7 @@
     display: flex;
     justify-content: flex-end;
     height: 42px;
-    padding: 0 10px;
+    padding: 0 6px;
     align-items: center;
     background: var(--window-body);
     border-bottom: 1px solid var(--chrome-shadow);
@@ -274,7 +274,7 @@
 
   .rat-body {
     flex: 1;
-    padding: 12px;
+    padding: 10px;
     overflow: auto;
   }
 
@@ -285,7 +285,7 @@
   }
 
   .rat-section {
-    margin-top: 16px;
+    margin-top: 12px;
     display: flex;
     flex-direction: column;
     gap: 10px;
