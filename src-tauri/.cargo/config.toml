@@ -1,0 +1,8 @@
+# Force Apple's cc/ld for Rust builds on Apple Silicon.
+# Without this, the Playbit toolchain's ld64.lld is picked up from PATH
+# and cannot resolve the macOS SDK (libSystem, libc, etc.).
+[target.aarch64-apple-darwin]
+linker = "/usr/bin/cc"
+
+[target.x86_64-apple-darwin]
+linker = "/usr/bin/cc"
