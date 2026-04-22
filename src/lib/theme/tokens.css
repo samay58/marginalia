@@ -32,6 +32,21 @@
   --led-highlight: #C7E8CB;
   --rationale-well-bg: #F5F2E4;
 
+  /* --- Revision marks (chip-family muted) --------------------------------- */
+  --insert-ink: #2B4E35;
+  --insert-bg: rgba(61, 107, 74, 0.12);
+  --insert-line: #3D6B4A;
+  --delete-ink: #8A3838;
+  --delete-bg: rgba(138, 56, 56, 0.1);
+  --delete-line: #8A3838;
+  --struck-bg: var(--delete-bg);
+  --struck-text: var(--delete-ink);
+  --struck-line: var(--delete-line);
+
+  /* --- Legacy token aliases for existing decoration code ------------------ */
+  --accent-subtle: var(--insert-bg);
+  --paper-bright: var(--chrome-highlight);
+
   /* --- Typography --------------------------------------------------------- */
   --font-chrome: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
