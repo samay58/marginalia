@@ -49,6 +49,13 @@
     setSelectedChange,
     clearSelectedChange,
   } from '$lib/stores/app.js';
+  import {
+    tabMode,
+    rationaleState,
+    toggleRationaleClosed,
+    toggleRationaleMinimized,
+    toggleRationaleMaximized,
+  } from '$lib/stores/review-ui.js';
   import { generateBundle } from '$lib/utils/bundle.js';
   import { createAnnotationRecord, reanchorAnnotation } from '$lib/utils/annotations.js';
   import { computeDiff } from '$lib/utils/diff.js';
@@ -117,7 +124,11 @@
   let cliInitialPath = $state('');
   /** @type {'review' | 'manuscript'} */
   let densityMode = $state('manuscript');
-  let currentTab = $state('review');
+
+  const showRail = $derived($tabMode === 'review');
+  const showRationale = $derived($tabMode === 'review' && $rationaleState !== 'closed');
+  const rationaleMinimized = $derived($rationaleState === 'minimized');
+  const rationaleMaximized = $derived($rationaleState === 'maximized');
   const breadcrumb = [
     { label: 'All drafts' },
     { label: 'Product Brief' },
@@ -1077,6 +1088,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       event.preventDefault();
       handleAnnotationShortcut();
     }
+    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      toggleRationaleClosed();
+      return;
+    }
     if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'o') {
       event.preventDefault();
       toggleReferenceSurface();
@@ -1517,11 +1533,17 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <AppHeader {breadcrumb} {nav} />
   <TabStrip
     tabs={[{ id: 'review', label: 'Review' }, { id: 'manuscript', label: 'Manuscript' }]}
-    activeId={currentTab}
-    onSelect={(id) => (currentTab = id)}
+    activeId={$tabMode}
+    onSelect={(id) => tabMode.set(/** @type {'review' | 'manuscript'} */ (id))}
   />
 
-  <div class="content-area app" class:density-review={densityMode === 'review'} class:density-manuscript={densityMode === 'manuscript'}>
+  <div
+    class="content-area app"
+    class:density-review={densityMode === 'review'}
+    class:density-manuscript={densityMode === 'manuscript'}
+    class:mode-manuscript={$tabMode === 'manuscript'}
+    class:rationale-max={rationaleMaximized}
+  >
   {#if recoveryCandidate}
     <div class="recovery-overlay">
       <div class="recovery-modal glass-surface glass-surface-focal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
@@ -1554,16 +1576,18 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   {/if}
 
   <main class="desk" class:compact={compactLayout}>
-    <ChangeRail
-      changes={$substantiveChanges}
-      trivialChanges={$trivialChanges}
-      trivialCount={$trivialChangeCount}
-      annotationChangeIds={$annotatedChangeIds}
-      annotationCount={$annotationEntries.length}
-      selectedChangeId={$selectedChangeId}
-      currentLine={$currentLine}
-      onSelectChange={handleRailChangeSelect}
-    />
+    {#if showRail}
+      <ChangeRail
+        changes={$substantiveChanges}
+        trivialChanges={$trivialChanges}
+        trivialCount={$trivialChangeCount}
+        annotationChangeIds={$annotatedChangeIds}
+        annotationCount={$annotationEntries.length}
+        selectedChangeId={$selectedChangeId}
+        currentLine={$currentLine}
+        onSelectChange={handleRailChangeSelect}
+      />
+    {/if}
 
     <div class="editor-column">
       <Editor
@@ -1585,10 +1609,15 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       />
     </div>
 
-    {#if !compactLayout}
+    {#if showRationale && !compactLayout}
       <section class="right-pane-shell">
         <AnnotationColumn
           bind:this={annotationColumnRef}
+          minimized={rationaleMinimized}
+          maximized={rationaleMaximized}
+          onMinimize={toggleRationaleMinimized}
+          onMaximize={toggleRationaleMaximized}
+          onClose={toggleRationaleClosed}
           selectedChange={$selectedChange}
           selectedAnnotationEntry={selectedAnnotationEntry}
           annotationEntries={$annotationEntries}
@@ -1726,9 +1755,16 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   .content-area {
     display: flex;
     flex: 1;
-    position: relative;
     background: var(--window-body);
     overflow: hidden;
+    min-height: 0;
+  }
+  .content-area.mode-manuscript :global(.rail),
+  .content-area.mode-manuscript :global(.rationale-panel) {
+    display: none;
+  }
+  .content-area.rationale-max :global(.manuscript-host) {
+    display: none;
   }
 
   .app {
