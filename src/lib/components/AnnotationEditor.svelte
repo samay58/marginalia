@@ -185,6 +185,13 @@
     white-space: nowrap;
   }
 
+  .annotation-remove:focus-visible,
+  .annotation-cancel:focus-visible,
+  .annotation-save:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
   .annotation-remove:active,
   .annotation-cancel:active,
   .annotation-save:active {
