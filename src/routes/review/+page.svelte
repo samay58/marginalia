@@ -3,14 +3,17 @@
   import { invoke } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
-  import Header from '$lib/components/Header.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import ChangeRail from '$lib/components/ChangeRail.svelte';
   import AnnotationColumn from '$lib/components/AnnotationColumn.svelte';
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
   import ReferencePane from '$lib/components/ReferencePane.svelte';
   import SessionDrawer from '$lib/components/SessionDrawer.svelte';
-  import StatusBar from '$lib/components/StatusBar.svelte';
+  import WindowFrame from '$lib/components/chrome/WindowFrame.svelte';
+  import TitleBar from '$lib/components/chrome/TitleBar.svelte';
+  import AppHeader from '$lib/components/chrome/AppHeader.svelte';
+  import TabStrip from '$lib/components/chrome/TabStrip.svelte';
+  import BottomShortcutBar from '$lib/components/chrome/BottomShortcutBar.svelte';
   import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
@@ -114,6 +117,13 @@
   let cliInitialPath = $state('');
   /** @type {'review' | 'manuscript'} */
   let densityMode = $state('manuscript');
+  let currentTab = $state('review');
+  const breadcrumb = [
+    { label: 'All drafts' },
+    { label: 'Product Brief' },
+    { label: 'Draft Review', active: true }
+  ];
+  const nav = ['Help', 'Preferences', 'Sign Out'];
   /** @type {null | ((rationale: string) => string | null)} */
   let writingRuleMatcher = $state(null);
   /** @type {null | (() => void)} */
@@ -1502,16 +1512,16 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     </div>
   </div>
 {:else}
-<div class="app" class:density-review={densityMode === 'review'} class:density-manuscript={densityMode === 'manuscript'}>
-  <Header
-    filename={$filename}
-    hasChanges={$hasChanges}
-    editCount={editCount}
-    {densityMode}
-    onSetDensity={setDensityMode}
-    onDone={handleDone}
+<WindowFrame>
+  <TitleBar title="Marginalia — Draft Review" />
+  <AppHeader {breadcrumb} {nav} />
+  <TabStrip
+    tabs={[{ id: 'review', label: 'Review' }, { id: 'manuscript', label: 'Manuscript' }]}
+    activeId={currentTab}
+    onSelect={(id) => (currentTab = id)}
   />
 
+  <div class="content-area app" class:density-review={densityMode === 'review'} class:density-manuscript={densityMode === 'manuscript'}>
   {#if recoveryCandidate}
     <div class="recovery-overlay">
       <div class="recovery-modal glass-surface glass-surface-focal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
@@ -1623,18 +1633,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onNotesInput={handleNotesChange}
   />
 
-  <StatusBar
-    {editCount}
-    annotationCount={$annotationEntries.length}
-    autosaveLabel={statusAutosaveLabel}
-    {degradedMode}
-    drawerOpen={notesExpanded}
-    {compactLayout}
-    hasReferences={referenceFiles.length > 0}
-    onToggleDrawer={toggleSessionDrawer}
-    onToggleReference={toggleReferenceSurface}
-  />
-
   <AnnotationPopover
     changeId={popoverChangeId}
     text={popoverText}
@@ -1648,7 +1646,10 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onRemove={handlePopoverRemove}
     onClose={handlePopoverClose}
   />
-</div>
+  </div>
+
+  <BottomShortcutBar edits={editCount} annotations={$annotationEntries.length} saved={autosaveState === 'saved' || autosaveState === 'idle'} />
+</WindowFrame>
 {/if}
 
 <style>
@@ -1722,12 +1723,21 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     color: var(--ink-faded);
   }
 
+  .content-area {
+    display: flex;
+    flex: 1;
+    position: relative;
+    background: var(--window-body);
+    overflow: hidden;
+  }
+
   .app {
-    height: 100vh;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     background: var(--canvas-paper);
     box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.04);
+    width: 100%;
+    min-height: 0;
   }
 
   .app.density-manuscript {
