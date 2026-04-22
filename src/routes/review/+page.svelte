@@ -15,6 +15,7 @@
   import TabStrip from '$lib/components/chrome/TabStrip.svelte';
   import BottomShortcutBar from '$lib/components/chrome/BottomShortcutBar.svelte';
   import HelpModal from '$lib/components/chrome/HelpModal.svelte';
+  import PreferencesPanel from '$lib/components/chrome/PreferencesPanel.svelte';
   import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
@@ -1706,6 +1707,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onDone={handleDone}
   />
   <HelpModal open={helpOpen} onClose={() => (helpOpen = false)} />
+  <PreferencesPanel open={preferencesOpen} onClose={() => (preferencesOpen = false)} />
 </WindowFrame>
 {/if}
 
