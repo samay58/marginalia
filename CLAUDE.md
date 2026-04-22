@@ -47,8 +47,10 @@ Each `check:*` script is a standalone regression test in `scripts/`. `pnpm run c
 - **Desktop shell**: Tauri 2 (Rust). The Rust layer is intentionally thin: file I/O, bundle persistence, CLI arg parsing, window lifecycle. All review logic lives in the frontend.
 - **Editor**: Milkdown (ProseMirror-based markdown editor)
 - **Diffing**: `diff-match-patch` on rendered plain text, not raw markdown
-- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`
+- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`, gated behind a Preferences toggle + `VITE_DIALKIT=1` (hidden by default)
 - **Animations**: `motion` (Framer Motion for JS)
+- **Theme**: v2 clunky old-school chrome. Tokens in `src/lib/theme/tokens.css`, bevel + utility classes in `src/lib/theme/chrome.css`. Full spec in `docs/design/DESIGN_REFERENCE.md`.
+- **Fonts**: EB Garamond (wordmark + italic empty states), Old Standard TT (manuscript headings), IM Fell English (manuscript body), IBM Plex Sans (chrome UI), IBM Plex Mono (keycaps + counters). Loaded via Google Fonts link in `src/routes/+layout.svelte`.
 
 ## Architecture
 
@@ -79,9 +81,14 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 - `src/lib/utils/bundle.js` — bundle generation (format `3.0`)
 - `src/lib/components/Editor.svelte` — Milkdown host, persistent note markers from resolved annotations
 - `src/lib/components/ChangeRail.svelte` — left-side change index: substantive changes shown with type icons, trivial edits collapsed at bottom
-- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow (headerless, minimal chrome)
-- `src/lib/components/AnnotationPopover.svelte` — compact-layout rationale UI
+- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow, framed as a v2 beveled sub-window with navy title bar (min/max/close), sunken body well, resize grip. Flex-sibling column, not an absolute overlay.
+- `src/lib/components/AnnotationEditor.svelte` — compose UI for rationales (excerpt preview, textarea, Remove / Cancel / Save buttons). v2 chrome styling.
+- `src/lib/components/AnnotationPopover.svelte` — compact-layout rationale UI (still v1 styling, slated for a future pass)
+- `src/lib/components/chrome/` — reusable v2 chrome primitives: `WindowFrame`, `TitleBar`, `TrafficLight`, `WindowControl`, `AppHeader`, `TabStrip`, `BottomShortcutBar`, `Keycap`, `BeveledButton`, `StatusLED`, `SunkenWell`, `HelpModal`, `PreferencesPanel`
+- `src/lib/stores/review-ui.js` — ephemeral tab mode + rationale panel state (open/minimized/maximized/closed)
+- `src/lib/stores/preferences.js` — persisted preferences (localStorage); currently gates the DialKit tuning handle
 - `src-tauri/src/lib.rs` — native file/bundle I/O, CLI parsing, window commands
+- `src-tauri/.cargo/config.toml` — forces Apple's `/usr/bin/cc` as the Rust linker, bypassing the Playbit toolchain's `ld64.lld` which can't resolve the macOS SDK
 
 ### Annotation model
 
@@ -113,7 +120,7 @@ Slop/lint matching (tone violations, WRITING.md ban patterns, the `linesWithSlop
 
 - Diffs are computed from rendered plain text, not raw markdown.
 - Whitespace-only changes are filtered from the visible review surface.
-- Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets remain click-intercepted.
+- Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets and `⌥-click` on insertions are click-intercepted; bare clicks on insertions place the cursor normally. The rail is the primary selection path for insertions; `⌥-click` is the discoverability affordance.
 - Selecting an edit must not focus or reopen the rationale composer.
 - Saved manuscript markers are keyed by stable annotation IDs and grouped by block, not mutable geometry buckets.
 
