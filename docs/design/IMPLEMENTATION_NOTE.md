@@ -130,3 +130,42 @@ Appendix commits on this branch (22 total):
 ```
 git log main..HEAD --oneline
 ```
+
+---
+
+## Polish pass — 2026-04-22
+
+**Plan:** `docs/superpowers/plans/2026-04-22-v2-polish-pass.md`
+
+### Landed
+- **Revision-mark tokens restored** (Phase A). `--insert-*`, `--delete-*`, `--struck-*`, plus legacy aliases `--accent-subtle` and `--paper-bright` are back in `tokens.css`, chip-family muted palette. Editor's `.added` / `.struck` decorations render again — core insert (green wash + underline) and delete (red wash + strikethrough) UX restored.
+- **Layout restructured** (Phase B). Right-side WindowControl trio removed from the title bar (traffic lights are the sole min/max/close affordance). `src/lib/stores/review-ui.js` added with `tabMode` and `rationaleState`. `content-area` is now a real flex row with three real columns (rail / manuscript / rationale); `AnnotationColumn` is a flex sibling, not an absolute overlay. `Editor` padding simplified to `40px 72px 60px 72px` and `--content-max-width` clamp dropped — text now wraps at the column's natural width instead of 3-word lines. `⌘⇧R` added to toggle the Rationale panel.
+- **AnnotationColumn empty-state collapsed** (Phase C). When nothing is selected and no annotations exist, the panel shows a single italic "No rationales yet." — the competing "Select an edit to review it." / "SAVED NOTES" strings no longer stack.
+- **Interactive correctness** (Phase D). Tauri capabilities `core:window:allow-minimize`, `allow-toggle-maximize`, `allow-close` granted. `Keycap` accepts an optional `onClick` and becomes a real button when one is provided. `BottomShortcutBar` keycaps fire the same handlers as the keyboard shortcuts (`toggleSessionDrawer`, `handleAnnotationShortcut`, `toggleReferenceSurface`, undo, `handleDone`). `AppHeader` breadcrumb is now muted indicator text (no blue links, no pointer cursor), nav reduced to Help + Preferences as real `<button>`s; Sign Out removed. `HelpModal` lists keyboard shortcuts.
+- **DialKit gated via Preferences** (Phase E). `src/lib/stores/preferences.js` persists to `localStorage` (key `marginalia.preferences.v1`). `<DialRoot />` in the layout renders conditionally; `DialStore.registerPanel` in the review page is gated at mount. `PreferencesPanel` exposes the `Show design tuning handle (DialKit)` checkbox.
+
+### Regression gate (Phase F, all green)
+
+- `pnpm run check:diff` ✓
+- `pnpm run check:annotations` ✓
+- `pnpm run check:semantic` ✓
+- `pnpm run check:bundle` ✓
+- `pnpm run check:hook` ✓
+- `pnpm run check:lint` ✓
+- `pnpm run build` ✓
+
+`pnpm run check` (svelte-check) reports 2 pre-existing errors (`vite.config.js` `process` type and `review/+page.svelte` DialConfig array-index typing). The a11y warning on `AppHeader.svelte` that was introduced in Phase 5 is now gone.
+
+### Visual fidelity pass (human-in-loop)
+
+Run `pnpm tauri dev` and walk through the 16-item checklist in the polish-pass plan, Phase F Task F2. Report any drift; fixes will follow the paper-tighten order (token → primitive → composition). Preferences toggle persists across reloads via localStorage.
+
+### Known follow-ups
+
+- DialKit gating reads preferences at mount; toggling mid-session requires a reload to take effect.
+- Breadcrumb / `All drafts` / `Product Brief` still have no real navigation destination.
+- Sign Out removed entirely until auth lands.
+- Rationale resize grip is decorative; min/max/close buttons carry the same affordances.
+- Undo keycap uses `document.execCommand('undo')`; swap for a Milkdown undo API call when exposed.
+- Preferences persists to `localStorage`; Tauri fs-backed storage is a follow-up if prefs grow to multi-user.
+
