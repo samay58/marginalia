@@ -14,6 +14,7 @@
   import AppHeader from '$lib/components/chrome/AppHeader.svelte';
   import TabStrip from '$lib/components/chrome/TabStrip.svelte';
   import BottomShortcutBar from '$lib/components/chrome/BottomShortcutBar.svelte';
+  import HelpModal from '$lib/components/chrome/HelpModal.svelte';
   import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
@@ -1692,6 +1693,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onUndo={() => { try { document.execCommand('undo'); } catch {} }}
     onDone={handleDone}
   />
+  <HelpModal open={helpOpen} onClose={() => (helpOpen = false)} />
 </WindowFrame>
 {/if}
 
