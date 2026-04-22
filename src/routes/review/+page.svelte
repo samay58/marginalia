@@ -1974,7 +1974,13 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     min-width: 0;
     overflow: hidden;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .editor-column > :global(*) {
+    width: 100%;
+    min-width: 0;
   }
 
   .right-pane-shell {

@@ -507,12 +507,21 @@
 
   .manuscript-host {
     flex: 1;
+    width: 100%;
+    min-width: 0;
     background: var(--paper);
     border-left: 1px solid var(--chrome-shadow);
     box-shadow: inset 1px 0 0 var(--chrome-highlight);
     padding: 40px 72px 60px 72px;
     overflow-y: auto;
     overflow-x: hidden;
+  }
+
+  :global(.manuscript-host .milkdown),
+  :global(.manuscript-host .ProseMirror) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   :global(.v2-manuscript .ProseMirror) {
     font-family: var(--font-body);
