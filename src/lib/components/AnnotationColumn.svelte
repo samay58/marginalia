@@ -5,8 +5,13 @@
 
   /** @typedef {import('../utils/diff.js').Change} Change */
 
-  /** @type {{ selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
+  /** @type {{ minimized?: boolean, maximized?: boolean, onMinimize?: () => void, onMaximize?: () => void, onClose?: () => void, selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
   let {
+    minimized = false,
+    maximized = false,
+    onMinimize = () => {},
+    onMaximize = () => {},
+    onClose = () => {},
     selectedChange = null,
     selectedAnnotationEntry = null,
     annotationEntries = [],
@@ -33,16 +38,16 @@
   const stripes = [0, 1, 2, 3, 4];
 </script>
 
-<aside class="rationale-panel" class:density-review={densityMode === 'review'}>
+<aside class="rationale-panel" class:density-review={densityMode === 'review'} class:minimized class:maximized>
   <div class="rat-titlebar">
     <span class="rat-title">Rationale</span>
     <div class="rat-stripes">
       {#each stripes as _, i}<span class:dark={i % 2 === 1}></span>{/each}
     </div>
     <div class="rat-ctls">
-      <button class="rat-ctl" aria-label="Minimize"><span class="rat-bar"></span></button>
-      <button class="rat-ctl" aria-label="Maximize"><span class="rat-box"></span></button>
-      <button class="rat-ctl rat-x" aria-label="Close">✕</button>
+      <button class="rat-ctl" aria-label="Minimize" onclick={onMinimize}><span class="rat-bar"></span></button>
+      <button class="rat-ctl" aria-label="Maximize" onclick={onMaximize}><span class="rat-box"></span></button>
+      <button class="rat-ctl rat-x" aria-label="Close" onclick={onClose}>✕</button>
     </div>
   </div>
 
@@ -171,16 +176,28 @@
 
 <style>
   .rationale-panel {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    bottom: 22px;
-    width: var(--rationale-w);
     display: flex;
     flex-direction: column;
+    width: var(--rationale-w);
+    flex-shrink: 0;
     background: var(--window-body);
-    border: 1px solid var(--navy-shadow);
-    box-shadow: var(--bevel-window-2);
+    border-left: 1px solid var(--navy-shadow);
+    box-shadow: inset 1px 0 0 var(--chrome-highlight);
+    position: relative;
+    overflow: hidden;
+  }
+  .rationale-panel.minimized {
+    height: 34px;
+    align-self: flex-start;
+  }
+  .rationale-panel.maximized {
+    flex: 1;
+    width: auto;
+  }
+  .rationale-panel.minimized .rat-toolbar,
+  .rationale-panel.minimized .rat-body,
+  .rationale-panel.minimized .rat-grip {
+    display: none;
   }
   .rat-titlebar {
     display: flex;
