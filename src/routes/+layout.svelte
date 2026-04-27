@@ -17,4 +17,4 @@
 </script>
 
 {@render children()}
-<DialRoot />
+<DialRoot defaultOpen={false} />

@@ -72,16 +72,16 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 
 ### Primary files
 
-- `src/routes/review/+page.svelte` — app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
-- `src/lib/stores/app.js` — document state, plain-text projections, debounced diff chain, trivial/substantive change split
-- `src/lib/utils/diff.js` — stable text diff with ID retention across edits
-- `src/lib/utils/annotations.js` — annotation records, target metadata, reattachment scoring, stale resolution
-- `src/lib/utils/bundle.js` — bundle generation (format `3.0`)
-- `src/lib/components/Editor.svelte` — Milkdown host, persistent note markers from resolved annotations
-- `src/lib/components/ChangeRail.svelte` — left-side change index: substantive changes shown with type icons, trivial edits collapsed at bottom
-- `src/lib/components/AnnotationColumn.svelte` — desktop rationale workflow (headerless, minimal chrome)
-- `src/lib/components/AnnotationPopover.svelte` — compact-layout rationale UI
-- `src-tauri/src/lib.rs` — native file/bundle I/O, CLI parsing, window commands
+- `src/routes/review/+page.svelte`: app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
+- `src/lib/stores/app.js`: document state, plain-text projections, debounced diff chain, trivial/substantive change split
+- `src/lib/utils/diff.js`: stable text diff with ID retention across edits
+- `src/lib/utils/annotations.js`: annotation records, target metadata, reattachment scoring, stale resolution
+- `src/lib/utils/bundle.js`: bundle generation (format `3.0`)
+- `src/lib/components/Editor.svelte`: Milkdown host, persistent note markers from resolved annotations
+- `src/lib/components/ChangeRail.svelte`: left-side change index. Substantive changes shown with type icons; trivial edits collapsed at the bottom.
+- `src/lib/components/AnnotationColumn.svelte`: desktop rationale workflow (headerless, minimal chrome)
+- `src/lib/components/AnnotationPopover.svelte`: compact-layout rationale UI
+- `src-tauri/src/lib.rs`: native file/bundle I/O, CLI parsing, window commands
 
 ### Annotation model
 
@@ -150,8 +150,8 @@ The hook enqueues requests and processes them one at a time. It writes a status 
 
 ## Docs
 
-- `docs/README.md` — user-facing overview
-- `docs/architecture.md` — canonical implementation doc
-- `docs/reliability.md` — behavior contracts and validation runbook
-- `docs/maintainers/release.md` — release checklist
-- `docs/design/` — design exploration references
+- `docs/README.md`: user-facing overview
+- `docs/architecture.md`: canonical implementation doc
+- `docs/reliability.md`: behavior contracts and validation runbook
+- `docs/maintainers/release.md`: release checklist
+- `docs/design/`: design exploration references
