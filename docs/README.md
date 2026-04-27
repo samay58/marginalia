@@ -10,6 +10,8 @@ Canonical docs for Marginalia live here.
   Non-negotiable behavior contracts and validation runbook.
 - [maintainers/release.md](maintainers/release.md)
   Release checklist and publishing flow.
+- [hooks.md](hooks.md)
+  Runtime-neutral hook adapter contract with Claude/Codex notes.
 
 ## Supporting material
 

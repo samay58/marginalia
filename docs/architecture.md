@@ -31,17 +31,30 @@ Important interaction rule: selecting an edit is not the same as composing a rat
 ## Core data flow
 
 1. Rust reads the markdown file and exposes it to the frontend.
-2. The frontend stores:
+2. The frontend stores one canonical review session:
    - original markdown
    - edited markdown
    - original plain text
    - edited plain text
+   - document, diff, and render epochs
+   - durable review targets
    - annotation records
 3. Diffing runs on the plain-text projections, because that is what the user actually reviewed.
-4. Resolved annotations are derived against the latest diff.
-5. On finalize, the frontend generates the bundle and Rust persists it.
+4. Diffs create visual change groups. They do not act as the identity layer.
+5. Resolved annotations are derived against durable review targets.
+6. On finalize, the frontend generates the bundle and Rust persists it.
 
 ## Annotation model
+
+Review targets are durable records. Annotations attach to targets, not directly to raw diff IDs.
+
+Target kinds:
+
+- `change`
+- `change_group`
+- `range`
+- `semantic_change`
+- `global`
 
 Annotations are durable records, not a `changeId -> note` map.
 
@@ -51,12 +64,16 @@ Each record stores:
 - rationale text
 - optional matched writing rule
 - target metadata:
+  - target ID
+  - target kind
   - last resolved change ID
   - change type
   - excerpt
   - line hint
   - before/current/after line context
   - block key
+  - target snapshot
+  - resolution strategy and confidence
 - created/updated timestamps
 
 Resolution policy:
@@ -83,20 +100,26 @@ Current bundle contents:
 
 Current schema notes:
 
-- `changes.json` is bundle format `3.0`
-- `annotations.json` schema is `3.0`
-- `provenance.json` schema is `1.0`
+- `changes.json` is bundle format `3.1`
+- `annotations.json` schema is `3.1`
+- `provenance.json` schema is `1.1`
 
 ## Main modules
 
 - `src/routes/review/+page.svelte`
   App orchestration, recovery, selection/composer state, bundle finalization.
+- `src/lib/stores/review-session.js`
+  Shared review session state, epochs, target state, draft state, and derived annotation/diff state.
 - `src/lib/stores/app.js`
-  Shared document state and derived annotation/diff state.
+  Compatibility facade for existing imports.
 - `src/lib/utils/diff.js`
   Stable text diff logic.
 - `src/lib/utils/annotations.js`
   Annotation creation, normalization, remapping, and stale resolution.
+- `src/lib/utils/review-targets.js`
+  Durable review targets, change groups, target resolution, and rationale drafts.
+- `src/lib/utils/diff-render-state.js`
+  Diff snapshot hashes and render update decisions.
 - `src/lib/utils/bundle.js`
   Bundle generation and summary/provenance output.
 - `src/lib/components/Editor.svelte`

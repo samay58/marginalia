@@ -4,11 +4,12 @@
  */
 
 import DiffMatchPatch from 'diff-match-patch';
+import { createChangeGroups } from './review-targets.js';
 
 const dmp = new DiffMatchPatch();
 const textEncoder = new TextEncoder();
-const BUNDLE_FORMAT_VERSION = '3.0';
-const PROVENANCE_SCHEMA_VERSION = '1.0';
+const BUNDLE_FORMAT_VERSION = '3.1';
+const PROVENANCE_SCHEMA_VERSION = '1.1';
 
 /**
  * @typedef {import('./annotations.js').ResolvedAnnotation} ResolvedAnnotation
@@ -136,6 +137,23 @@ export function generateChangesJson(
       text: change.text,
       location: change.location,
     })),
+    change_groups: (
+      /** @type {any} */ (diffResult).groups ||
+      createChangeGroups(diffResult.changes || [], diffResult._editedText || '')
+    ).map(
+      (/** @type {any} */ group) => ({
+        id: group.id,
+        kind: group.kind,
+        change_ids: group.changeIds,
+        descriptor: {
+          type_signature: group.descriptor?.typeSignature || null,
+          before_excerpt: group.descriptor?.beforeExcerpt || '',
+          after_excerpt: group.descriptor?.afterExcerpt || '',
+          line_start: group.descriptor?.lineStart ?? null,
+          line_end: group.descriptor?.lineEnd ?? null,
+        },
+      })
+    ),
     semantic_changes: semanticChanges.map((change) => ({
       id: change.id,
       type: change.type,
@@ -182,28 +200,48 @@ function formatSemanticChange(change) {
  */
 export function generateAnnotationsJson(annotations, generalNotes) {
   return {
-    schema_version: '3.0',
-    annotations: annotations.map((entry) => ({
-      id: entry.annotation.id,
-      rationale: entry.annotation.rationale,
-      status: entry.status,
-      matched_rule: entry.annotation.matchedRule || null,
-      reason: entry.reason || null,
-      created_at: entry.annotation.createdAt,
-      updated_at: entry.annotation.updatedAt,
-      target: {
-        change_id: entry.annotation.target.changeId,
-        resolved_change_id: entry.resolvedChangeId,
-        type: entry.annotation.target.type,
-        excerpt: entry.annotation.target.excerpt,
-        resolved_excerpt: entry.change?.text || null,
-        line: entry.annotation.target.line,
-        before_line: entry.annotation.target.beforeLine,
-        line_text: entry.annotation.target.lineText,
-        after_line: entry.annotation.target.afterLine,
-        block_key: entry.annotation.target.blockKey,
-      },
-    })),
+    schema_version: '3.1',
+    annotations: annotations.map((entry) => {
+      const entryAny = /** @type {any} */ (entry);
+      const annotationAny = /** @type {any} */ (entry.annotation);
+      return {
+        id: entry.annotation.id,
+        rationale: entry.annotation.rationale,
+        priority: annotationAny.priority || 'medium',
+        status: entry.status,
+        matched_rule: entry.annotation.matchedRule || null,
+        reason: entry.reason || null,
+        created_at: entry.annotation.createdAt,
+        updated_at: entry.annotation.updatedAt,
+        target: {
+          target_id: annotationAny.targetId || entryAny.reviewTarget?.id || null,
+          target_kind: annotationAny.targetKind || entryAny.reviewTarget?.kind || null,
+          change_id: entry.annotation.target.changeId,
+          resolved_change_id: entry.resolvedChangeId,
+          type: entry.annotation.target.type,
+          excerpt: entry.annotation.target.excerpt,
+          resolved_excerpt: entry.change?.text || null,
+          line: entry.annotation.target.line,
+          before_line: entry.annotation.target.beforeLine,
+          line_text: entry.annotation.target.lineText,
+          after_line: entry.annotation.target.afterLine,
+          block_key: entry.annotation.target.blockKey,
+          snapshot: annotationAny.targetSnapshot || entryAny.reviewTarget?.descriptor || null,
+          resolution_strategy:
+            annotationAny.resolution?.strategy ||
+            entryAny.reviewTarget?.resolution?.strategy ||
+            (entry.status === 'active' ? 'exact' : 'none'),
+          resolution_confidence:
+            annotationAny.resolution?.confidence ??
+            entryAny.reviewTarget?.resolution?.confidence ??
+            (entry.status === 'active' ? 1 : 0),
+          stale_reason:
+            annotationAny.resolution?.staleReason ||
+            entryAny.reviewTarget?.resolution?.staleReason ||
+            (entry.status === 'stale' ? entry.reason || 'missing' : null),
+        },
+      };
+    }),
     general_notes: generalNotes || '',
   };
 }
@@ -218,6 +256,7 @@ export function generateAnnotationsJson(annotations, generalNotes) {
  * @param {DiffResult} options.diffResult
  * @param {SemanticChange[]} options.semanticChanges
  * @param {ResolvedAnnotation[]} options.annotations
+ * @param {any[]} [options.reviewTargets]
  * @param {LintFinding[]} options.lintFindings
  * @param {string | null | undefined} options.principlesPath
  * @param {string} options.patchContent
@@ -233,6 +272,7 @@ export function generateProvenanceJson({
   diffResult,
   semanticChanges,
   annotations,
+  reviewTargets = [],
   lintFindings,
   principlesPath,
   patchContent,
@@ -267,6 +307,9 @@ export function generateProvenanceJson({
       annotations_total: annotations.length,
       annotations_active: annotations.filter((entry) => entry.status === 'active').length,
       annotations_stale: annotations.filter((entry) => entry.status === 'stale').length,
+      review_targets_total: reviewTargets.length,
+      review_targets_active: reviewTargets.filter((target) => target.status === 'active').length,
+      review_targets_stale: reviewTargets.filter((target) => target.status === 'stale').length,
       lint_findings: lintFindings.length,
       patch_hunks: patchHunkCount,
     },
@@ -302,22 +345,69 @@ export function generateSummaryMarkdown(
 ) {
   const lines = [];
   const minutesLabel = sessionDuration < 60 ? '<1 min' : `${Math.round(sessionDuration / 60)} min`;
+  const active = annotations.filter((entry) => entry.status === 'active');
+  const stale = annotations.filter((entry) => entry.status === 'stale');
 
-  lines.push(`# Review: ${filename}`);
-  lines.push(`${new Date().toISOString().slice(0, 10)} · ${minutesLabel}`);
+  lines.push('# Marginalia Review Summary');
+  lines.push('');
+  lines.push('## Outcome');
+  lines.push(`- Original file: ${filename}`);
+  lines.push(`- Reviewed at: ${new Date().toISOString().slice(0, 10)}`);
+  lines.push(`- Review duration: ${minutesLabel}`);
+  lines.push(`- Final status: completed`);
+  lines.push(`- Total visible changes: ${(diffResult.changes || []).filter((change) => change.text?.trim()).length}`);
+  lines.push(`- Text changes: ${diffResult.deletions || 0} deletions, ${diffResult.insertions || 0} insertions`);
+  lines.push(`- Semantic markdown changes: ${semanticChanges.length}`);
+  lines.push(`- Rationales: ${active.length}`);
+  lines.push(`- Stale rationales: ${stale.length}`);
   lines.push('');
 
-  // Changes summary
-  lines.push('## Changes');
-  const parts = [];
-  if (diffResult.deletions > 0) {
-    parts.push(`${diffResult.deletions} deletion${diffResult.deletions > 1 ? 's' : ''}`);
+  lines.push('## High-confidence lessons for next draft');
+  if (active.length === 0) {
+    lines.push('No local rationales were captured.');
+  } else {
+    active.slice(0, 5).forEach((entry, index) => {
+      lines.push(`${index + 1}. ${entry.annotation.rationale}`);
+    });
   }
-  if (diffResult.insertions > 0) {
-    parts.push(`${diffResult.insertions} insertion${diffResult.insertions > 1 ? 's' : ''}`);
-  }
-  lines.push(parts.join(', ') || 'No changes');
   lines.push('');
+
+  lines.push('## Local edit rationales');
+  if (active.length === 0) {
+    lines.push('No change-bound rationales.');
+    lines.push('');
+  }
+
+  active.forEach((entry, index) => {
+    const entryAny = /** @type {any} */ (entry);
+    const annotationAny = /** @type {any} */ (entry.annotation);
+    const descriptor = annotationAny.targetSnapshot || entryAny.reviewTarget?.descriptor || {};
+    const before = descriptor.beforeExcerpt || entry.annotation.target.excerpt || '';
+    const after = descriptor.afterExcerpt || entry.change?.text || '';
+    const preview = after || before || `Edit ${index + 1}`;
+    lines.push(`### Edit ${index + 1}: ${preview.slice(0, 64)}${preview.length > 64 ? '...' : ''}`);
+    if (before) {
+      lines.push('');
+      lines.push('Before:');
+      lines.push(`> ${before}`);
+    }
+    if (after) {
+      lines.push('');
+      lines.push('After:');
+      lines.push(`> ${after}`);
+    }
+    lines.push('');
+    lines.push('Rationale:');
+    lines.push(`> ${entry.annotation.rationale}`);
+    lines.push('');
+    lines.push('Agent lesson:');
+    lines.push(`- ${entry.annotation.rationale}`);
+    lines.push('');
+    lines.push('Confidence:');
+    lines.push(`- target resolution: ${annotationAny.resolution?.strategy || entryAny.reviewTarget?.resolution?.strategy || 'exact'}`);
+    lines.push(`- annotation status: ${entry.status}`);
+    lines.push('');
+  });
 
   if (semanticChanges.length > 0) {
     lines.push('## Structural & Semantic Changes');
@@ -327,58 +417,27 @@ export function generateSummaryMarkdown(
     lines.push('');
   }
 
-  // Feedback by priority
-  lines.push('## Feedback (by priority)');
-
-  const important = annotations.filter(
-    (entry) => entry.status === 'active' && entry.annotation.matchedRule
-  );
-  const other = annotations.filter(
-    (entry) => entry.status === 'active' && !entry.annotation.matchedRule
-  );
-  const stale = annotations.filter((entry) => entry.status === 'stale');
-
-  let num = 1;
-
-  for (const entry of important) {
-    lines.push(`${num}. [IMPORTANT] ${entry.annotation.rationale}`);
-    if (entry.change) {
-      const preview = entry.change.text.slice(0, 40);
-      lines.push(`   - "${preview}${entry.change.text.length > 40 ? '...' : ''}"`);
-    }
-    if (entry.annotation.matchedRule) {
-      lines.push(`   - Matches WRITING.md: ${entry.annotation.matchedRule}`);
-    }
-    lines.push('');
-    num++;
-  }
-
-  for (const entry of other) {
-    lines.push(`${num}. ${entry.annotation.rationale}`);
-    if (entry.change) {
-      const preview = entry.change.text.slice(0, 40);
-      lines.push(`   - "${preview}${entry.change.text.length > 40 ? '...' : ''}"`);
-    }
-    lines.push('');
-    num++;
-  }
-
-  if (important.length === 0 && other.length === 0) {
-    lines.push('No change-bound rationales.');
+  if (generalNotes) {
+    lines.push('## Global session notes');
+    lines.push(generalNotes);
     lines.push('');
   }
 
-  if (stale.length > 0) {
-    lines.push('## Stale Notes');
+  lines.push('## Stale or ambiguous notes');
+  if (stale.length === 0) {
+    lines.push('No stale notes.');
+  } else {
+    lines.push('These notes should not be treated as reliable edit-specific feedback.');
     for (const entry of stale) {
       lines.push(`- ${entry.annotation.rationale}`);
       if (entry.annotation.target.excerpt) {
         lines.push(`  - Last target: "${entry.annotation.target.excerpt}"`);
       }
-      lines.push('  - Status: stale (requires human confirmation)');
+      const annotationAny = /** @type {any} */ (entry.annotation);
+      lines.push(`  - Status: stale (${annotationAny.resolution?.staleReason || entry.reason || 'requires human confirmation'})`);
     }
-    lines.push('');
   }
+  lines.push('');
 
   if (lintFindings.length > 0) {
     lines.push('## Tone & Slop Flags');
@@ -393,12 +452,12 @@ export function generateSummaryMarkdown(
     lines.push('');
   }
 
-  // General notes
-  if (generalNotes) {
-    lines.push('## General');
-    lines.push(generalNotes);
-    lines.push('');
-  }
+  lines.push('## Exact artifacts');
+  lines.push('- final.md');
+  lines.push('- changes.patch');
+  lines.push('- changes.json');
+  lines.push('- annotations.json');
+  lines.push('- provenance.json');
 
   return lines.join('\n');
 }
@@ -412,6 +471,7 @@ export function generateSummaryMarkdown(
  * @param {DiffResult} options.diffResult
  * @param {SemanticChange[]} options.semanticChanges
  * @param {ResolvedAnnotation[]} options.annotations
+ * @param {any[]} [options.reviewTargets]
  * @param {string} options.generalNotes
  * @param {Date} options.startTime
  * @param {string | null} [options.principlesPath]
@@ -425,6 +485,7 @@ export async function generateBundle({
   diffResult,
   semanticChanges = [],
   annotations,
+  reviewTargets = [],
   generalNotes,
   startTime,
   principlesPath,
@@ -483,6 +544,7 @@ export async function generateBundle({
       diffResult,
       semanticChanges,
       annotations,
+      reviewTargets,
       lintFindings,
       principlesPath,
       patchContent,

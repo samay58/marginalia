@@ -146,7 +146,7 @@
     try {
       const textMap = buildTextMap(view.state.doc);
       if (diffResult?._editedText && textMap.text !== diffResult._editedText) {
-        anchorMarks = [];
+        // Keep the last stable anchors while the debounced diff catches up.
         return;
       }
 
@@ -401,6 +401,11 @@
       isInternalUpdate = true;
       editor.action(milkdownUtils.replaceAll(newContent));
       lastKnownContent = newContent;
+      const plainText = getCurrentPlainText();
+      if (plainText) {
+        onPlainTextChange(plainText);
+        onInitialRender(plainText);
+      }
     } catch (error) {
       reportRuntimeError('editor_external_sync_failed', error);
     } finally {
@@ -484,9 +489,6 @@
           >
             <span class="anchor-line"></span>
             <span class="anchor-badge">{mark.displayIndex}</span>
-            {#if mark.selected && mark.preview}
-              <span class="anchor-ghost">{mark.preview}</span>
-            {/if}
           </button>
         </div>
       {/each}
@@ -531,30 +533,41 @@
     position: absolute;
     inset: 0 auto 0 0;
     width: var(--gutter-width);
+    overflow: visible;
+    pointer-events: none;
   }
 
   .anchor-mark {
     position: absolute;
-    inset-inline: 0.35rem 0.5rem;
-    height: 1.1rem;
+    left: 0;
+    right: 0;
+    height: 1.45rem;
+    overflow: visible;
   }
 
   .anchor-hit {
-    position: relative;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    right: 0.45rem;
+    top: 0;
+    width: 2.3rem;
+    min-width: 2.3rem;
+    height: 1.45rem;
     border: none;
     background: transparent;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
     pointer-events: auto;
+    overflow: visible;
   }
 
   .anchor-line {
     position: absolute;
-    right: 0.5rem;
-    top: 0;
+    right: 0.12rem;
+    top: 0.12rem;
     width: 3px;
-    height: 1.1rem;
+    height: 1.15rem;
     border-radius: 999px;
     background: color-mix(in srgb, var(--accent) 78%, transparent);
   }
@@ -564,34 +577,23 @@
   }
 
   .anchor-badge {
-    position: absolute;
-    right: -0.1rem;
-    top: -0.05rem;
-    min-width: 1.2rem;
-    height: 1.2rem;
+    position: relative;
+    right: 0.38rem;
+    min-width: max(1.35rem, 2ch);
+    height: 1.35rem;
     border-radius: 999px;
-    padding: 0 0.25rem;
+    padding: 0 0.34rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: color-mix(in srgb, var(--accent) 88%, var(--paper-bright));
     color: var(--paper-bright);
     font-family: var(--font-mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
-  }
-
-  .anchor-ghost {
-    position: absolute;
-    right: 1.8rem;
-    top: -0.05rem;
-    max-width: calc(var(--gutter-width) - 2.2rem);
-    font-family: var(--font-body);
-    font-size: 0.675rem;
-    line-height: 1.2;
-    color: var(--delete-ink);
-    opacity: 0.7;
-    text-align: right;
   }
 
   .editor-root :global(.milkdown) {

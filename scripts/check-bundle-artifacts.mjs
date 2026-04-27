@@ -6,6 +6,11 @@ import { computeDiff } from '../src/lib/utils/diff.js';
 import { computeSemanticChanges } from '../src/lib/utils/semantic-diff.js';
 import { createAnnotationRecord, resolveAnnotations } from '../src/lib/utils/annotations.js';
 import { generateBundle } from '../src/lib/utils/bundle.js';
+import {
+  createChangeGroups,
+  createReviewTargetFromGroup,
+  resolveReviewTargets,
+} from '../src/lib/utils/review-targets.js';
 
 const dmp = new DiffMatchPatch();
 const textEncoder = new TextEncoder();
@@ -66,10 +71,17 @@ async function testBundleProvenanceAndPatch() {
   const diffResult = computeDiff(original, edited, []);
   const semanticChanges = computeSemanticChanges(original, edited);
   const annotations = [];
+  const groups = createChangeGroups(diffResult.changes, edited);
 
   const listInsertion = diffResult.changes.find(
     (change) => change.type === 'insertion' && change.text.includes('migration notes')
   );
+  const listGroup = groups.find((group) => group.changeIds.includes(listInsertion?.id));
+  const reviewTarget = createReviewTargetFromGroup(listGroup, {
+    editedText: edited,
+    documentEpoch: 1,
+  });
+  const reviewTargets = resolveReviewTargets([reviewTarget], { ...diffResult, groups }, edited);
   if (listInsertion) {
     annotations.push(
       createAnnotationRecord({
@@ -77,10 +89,11 @@ async function testBundleProvenanceAndPatch() {
         editedText: edited,
         rationale: 'Flag migration work explicitly to reduce rollout ambiguity.',
         matchedRule: null,
+        reviewTarget,
       })
     );
   }
-  const resolvedAnnotations = resolveAnnotations(annotations, diffResult, edited);
+  const resolvedAnnotations = resolveAnnotations(annotations, diffResult, edited, reviewTargets);
 
   const bundle = await generateBundle({
     filePath,
@@ -89,6 +102,7 @@ async function testBundleProvenanceAndPatch() {
     diffResult,
     semanticChanges,
     annotations: resolvedAnnotations,
+    reviewTargets,
     generalNotes: 'Keep this section factual and direct.',
     startTime: new Date(Date.now() - 150_000),
     principlesPath: '/tmp/WRITING.md',
@@ -107,8 +121,8 @@ async function testBundleProvenanceAndPatch() {
   assert.equal(patchedText, edited, 'expected patch to reconstruct final content');
 
   const provenance = JSON.parse(bundle.files['provenance.json']);
-  assert.equal(provenance.schema_version, '1.0', 'unexpected provenance schema version');
-  assert.equal(provenance.bundle.format_version, '3.0', 'unexpected bundle format version');
+  assert.equal(provenance.schema_version, '1.1', 'unexpected provenance schema version');
+  assert.equal(provenance.bundle.format_version, '3.1', 'unexpected bundle format version');
   assert.equal(provenance.bundle.source_file, filePath, 'source file mismatch in provenance');
   assert.equal(
     provenance.counts.semantic_changes,
@@ -149,12 +163,29 @@ async function testBundleProvenanceAndPatch() {
   );
 
   const changesJson = JSON.parse(bundle.files['changes.json']);
-  assert.equal(changesJson.bundle_format_version, '3.0', 'changes.json missing format marker');
+  assert.equal(changesJson.bundle_format_version, '3.1', 'changes.json missing format marker');
   assert.ok(Array.isArray(changesJson.semantic_changes), 'expected semantic_changes array');
+  assert.ok(Array.isArray(changesJson.change_groups), 'expected change_groups array');
 
   const annotationsJson = JSON.parse(bundle.files['annotations.json']);
-  assert.equal(annotationsJson.schema_version, '3.0', 'annotations.json missing schema version');
+  assert.equal(annotationsJson.schema_version, '3.1', 'annotations.json missing schema version');
   assert.equal(annotationsJson.annotations.length, resolvedAnnotations.length, 'annotation count mismatch');
+  assert.equal(
+    annotationsJson.annotations[0].target.target_id,
+    reviewTarget.id,
+    'annotation target id mismatch'
+  );
+  assert.equal(
+    annotationsJson.annotations[0].target.resolution_strategy,
+    'exact',
+    'annotation resolution strategy missing'
+  );
+
+  const summary = bundle.files['summary_for_agent.md'];
+  assert.match(summary, /# Marginalia Review Summary/, 'summary should use v3.1 heading');
+  assert.match(summary, /## High-confidence lessons for next draft/, 'summary missing lessons section');
+  assert.match(summary, /## Local edit rationales/, 'summary missing local rationales section');
+  assert.match(summary, /## Exact artifacts/, 'summary missing artifact section');
 }
 
 async function main() {

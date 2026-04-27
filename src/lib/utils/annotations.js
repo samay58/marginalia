@@ -20,9 +20,14 @@ const MIN_SCORE_MARGIN = 0.12;
 /**
  * @typedef {Object} AnnotationRecord
  * @property {string} id
+ * @property {string | null} targetId
+ * @property {'change' | 'change_group' | 'range' | 'semantic_change' | 'global' | null} targetKind
  * @property {string} rationale
  * @property {string | null} matchedRule
  * @property {AnnotationTarget} target
+ * @property {any} targetSnapshot
+ * @property {'low' | 'medium' | 'high'} priority
+ * @property {{ status?: 'active' | 'stale', strategy?: string, confidence?: number, staleReason?: string } | null} resolution
  * @property {string} createdAt
  * @property {string} updatedAt
  */
@@ -32,6 +37,7 @@ const MIN_SCORE_MARGIN = 0.12;
  * @property {AnnotationRecord} annotation
  * @property {'active' | 'stale'} status
  * @property {Change | null} change
+ * @property {any} [reviewTarget]
  * @property {AnnotationTarget} target
  * @property {string | null} resolvedChangeId
  * @property {string | null} reason
@@ -195,24 +201,51 @@ export function createAnnotationId() {
 }
 
 /**
- * @param {{ change: Change, editedText: string, rationale: string, matchedRule?: string | null, annotationId?: string | null, createdAt?: string | null, updatedAt?: string | null }} options
+ * @param {{ change?: Change | null, editedText: string, rationale: string, matchedRule?: string | null, annotationId?: string | null, createdAt?: string | null, updatedAt?: string | null, reviewTarget?: any, targetId?: string | null, targetKind?: string | null, targetSnapshot?: any, priority?: 'low' | 'medium' | 'high' }} options
  * @returns {AnnotationRecord}
  */
 export function createAnnotationRecord({
-  change,
+  change = null,
   editedText,
   rationale,
   matchedRule = null,
   annotationId = null,
   createdAt = null,
   updatedAt = null,
+  reviewTarget = null,
+  targetId = null,
+  targetKind = null,
+  targetSnapshot = null,
+  priority = 'medium',
 }) {
   const timestamp = new Date().toISOString();
+  const descriptor = reviewTarget?.descriptor || targetSnapshot || null;
+  const fallbackChange = change || null;
   return {
     id: annotationId || createAnnotationId(),
+    targetId: reviewTarget?.id || targetId || null,
+    targetKind: reviewTarget?.kind || targetKind || null,
     rationale: rationale.trim(),
     matchedRule,
-    target: buildAnnotationTarget(change, editedText),
+    target: fallbackChange
+      ? buildAnnotationTarget(fallbackChange, editedText)
+      : {
+          changeId: null,
+          type: null,
+          excerpt: descriptor?.afterExcerpt || descriptor?.beforeExcerpt || '',
+          line: descriptor?.lineStart ?? null,
+          beforeLine: descriptor?.blockTextBefore || '',
+          lineText: descriptor?.blockTextAfter || '',
+          afterLine: '',
+          blockKey: descriptor?.blockKey || '',
+        },
+    targetSnapshot: descriptor,
+    priority,
+    resolution: {
+      status: 'active',
+      strategy: reviewTarget?.resolution?.strategy || 'exact',
+      confidence: reviewTarget?.resolution?.confidence ?? 1,
+    },
     createdAt: createdAt || timestamp,
     updatedAt: updatedAt || timestamp,
   };
@@ -222,12 +255,22 @@ export function createAnnotationRecord({
  * @param {AnnotationRecord} annotation
  * @param {Change} change
  * @param {string} editedText
+ * @param {any} [reviewTarget]
  * @returns {AnnotationRecord}
  */
-export function reanchorAnnotation(annotation, change, editedText) {
+export function reanchorAnnotation(annotation, change, editedText, reviewTarget = null) {
+  const target = reviewTarget?.descriptor || annotation.targetSnapshot || null;
   return {
     ...annotation,
+    targetId: reviewTarget?.id || annotation.targetId || null,
+    targetKind: reviewTarget?.kind || annotation.targetKind || null,
     target: buildAnnotationTarget(change, editedText),
+    targetSnapshot: target,
+    resolution: {
+      status: 'active',
+      strategy: 'manual',
+      confidence: 1,
+    },
     updatedAt: new Date().toISOString(),
   };
 }
@@ -268,6 +311,8 @@ export function normalizeAnnotationRecord(annotation) {
   const target = annotation?.target || {};
   return {
     id: annotation?.id || createAnnotationId(),
+    targetId: annotation?.targetId ?? annotation?.target_id ?? null,
+    targetKind: annotation?.targetKind ?? annotation?.target_kind ?? null,
     rationale: String(annotation?.rationale || '').trim(),
     matchedRule: annotation?.matchedRule ?? annotation?.matched_rule ?? null,
     target: {
@@ -280,6 +325,12 @@ export function normalizeAnnotationRecord(annotation) {
       afterLine: String(target?.afterLine ?? target?.after_line ?? ''),
       blockKey: String(target?.blockKey ?? target?.block_key ?? ''),
     },
+    targetSnapshot: annotation?.targetSnapshot ?? annotation?.target_snapshot ?? null,
+    priority:
+      annotation?.priority === 'low' || annotation?.priority === 'high' || annotation?.priority === 'medium'
+        ? annotation.priority
+        : 'medium',
+    resolution: annotation?.resolution || null,
     createdAt,
     updatedAt,
   };
@@ -316,22 +367,76 @@ function scoreDescriptorMatch(target, descriptor) {
  * @param {AnnotationRecord[]} annotations
  * @param {import('./diff.js').DiffResult | null} diffResult
  * @param {string} editedText
+ * @param {any[]} [reviewTargets]
  * @returns {ResolvedAnnotation[]}
  */
-export function resolveAnnotations(annotations, diffResult, editedText) {
+export function resolveAnnotations(annotations, diffResult, editedText, reviewTargets = []) {
   const visibleChanges = (diffResult?.changes || []).filter(isVisibleChange);
   const lines = String(editedText || '').split(/\r?\n/);
   const descriptors = visibleChanges.map((change) => ({
     change,
     target: buildAnnotationTargetFromLines(change, lines),
   }));
+  const targetsById = new Map((reviewTargets || []).map((target) => [target.id, target]));
+  const changesById = new Map(visibleChanges.map((change) => [change.id, change]));
 
   return (annotations || []).map((annotation) => {
     const normalized = normalizeAnnotationRecord(annotation);
+
+    if (normalized.targetId && targetsById.has(normalized.targetId)) {
+      const reviewTarget = targetsById.get(normalized.targetId);
+      if (reviewTarget?.status === 'active') {
+        const resolvedChangeId =
+          reviewTarget.changeIds?.find((/** @type {string} */ changeId) => changesById.has(changeId)) ||
+          normalized.target.changeId ||
+          null;
+        const change = resolvedChangeId ? changesById.get(resolvedChangeId) || null : null;
+        return {
+          annotation: {
+            ...normalized,
+            targetSnapshot: normalized.targetSnapshot || reviewTarget.descriptor,
+            resolution: {
+              status: 'active',
+              strategy: reviewTarget.resolution?.strategy || 'exact',
+              confidence: reviewTarget.resolution?.confidence ?? 1,
+            },
+          },
+          status: 'active',
+          change,
+          reviewTarget,
+          target: change ? buildAnnotationTargetFromLines(change, lines) : normalized.target,
+          resolvedChangeId,
+          reason: reviewTarget.resolution?.strategy === 'heuristic' ? 'reattached' : null,
+        };
+      }
+
+      return {
+        annotation: {
+          ...normalized,
+          targetSnapshot: normalized.targetSnapshot || reviewTarget?.descriptor || null,
+          resolution: {
+            status: 'stale',
+            strategy: reviewTarget?.resolution?.strategy || 'none',
+            confidence: reviewTarget?.resolution?.confidence ?? 0,
+            staleReason: reviewTarget?.resolution?.staleReason || 'missing',
+          },
+        },
+        status: 'stale',
+        change: null,
+        reviewTarget,
+        target: normalized.target,
+        resolvedChangeId: null,
+        reason: reviewTarget?.resolution?.staleReason || 'missing',
+      };
+    }
+
     const exact = descriptors.find(({ change }) => change.id === normalized.target.changeId);
     if (exact) {
       return {
-        annotation: normalized,
+        annotation: {
+          ...normalized,
+          resolution: { status: 'active', strategy: 'exact', confidence: 1 },
+        },
         status: 'active',
         change: exact.change,
         target: exact.target,
@@ -357,7 +462,10 @@ export function resolveAnnotations(annotations, diffResult, editedText) {
       (!runnerUp || best.score - runnerUp.score >= MIN_SCORE_MARGIN)
     ) {
       return {
-        annotation: normalized,
+        annotation: {
+          ...normalized,
+          resolution: { status: 'active', strategy: 'heuristic', confidence: best.score },
+        },
         status: 'active',
         change: best.descriptor.change,
         target: best.descriptor.target,
@@ -367,7 +475,15 @@ export function resolveAnnotations(annotations, diffResult, editedText) {
     }
 
     return {
-      annotation: normalized,
+      annotation: {
+        ...normalized,
+        resolution: {
+          status: 'stale',
+          strategy: 'none',
+          confidence: best ? best.score : 0,
+          staleReason: best ? 'ambiguous' : 'missing',
+        },
+      },
       status: 'stale',
       change: null,
       target: normalized.target,

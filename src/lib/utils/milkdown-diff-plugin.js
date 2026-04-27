@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@milkdown/prose/state';
 import { Decoration, DecorationSet } from '@milkdown/prose/view';
 import { editorViewCtx } from '@milkdown/core';
 import { buildTextMap } from './prosemirror-text.js';
+import { getDecorationUpdateDecision } from './diff-render-state.js';
 
 const diffPluginKey = new PluginKey('marginalia-diff');
 
@@ -47,13 +48,6 @@ function createDiffDecorations(doc, textMap, diffResult, selectedChangeId, onCli
   }
 
   const offsets = textMap.offsets;
-  const hasSnapshot = typeof diffResult._editedText === 'string';
-  const isFresh = !hasSnapshot || textMap.text === diffResult._editedText;
-
-  if (!isFresh) {
-    return DecorationSet.empty;
-  }
-
   /** @param {number} offset */
   const offsetToPos = (offset) => {
     // Return null for any invalid offset - widget will be skipped
@@ -145,10 +139,18 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
           // Explicit trigger: full rebuild from latest diff data
           if (tr.getMeta(diffPluginKey) === 'update') {
             const diffResult = getDiffResult();
-            if (!diffResult || !diffResult.changes || diffResult.changes.length === 0) {
+            const textMap = buildTextMap(newState.doc);
+            const decision = getDecorationUpdateDecision({
+              diffSnapshot: diffResult,
+              currentText: textMap.text,
+              hasStableDecorations: oldDecorations !== DecorationSet.empty,
+            });
+            if (decision.action === 'preserve') {
+              return oldDecorations.map(tr.mapping, tr.doc);
+            }
+            if (decision.action === 'clear') {
               return DecorationSet.empty;
             }
-            const textMap = buildTextMap(newState.doc);
             return createDiffDecorations(newState.doc, textMap, diffResult, getSelectedChangeId(), currentClickHandler);
           }
           // Normal keystroke: cheaply map existing decoration positions
@@ -166,8 +168,14 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
 
         handleClick(view, pos, event) {
           const target = event.target;
-          if (target instanceof HTMLElement && currentClickHandler) {
-            const changeEl = target.closest('[data-change-id]');
+          const targetElement =
+            target instanceof HTMLElement
+              ? target
+              : target instanceof Text
+                ? target.parentElement
+                : null;
+          if (targetElement && currentClickHandler) {
+            const changeEl = targetElement.closest('[data-change-id]');
             if (!(changeEl instanceof HTMLElement)) {
               return false;
             }
@@ -175,14 +183,14 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
             const changeText = changeEl.dataset?.changeText;
             const changeType = changeEl.dataset?.changeType;
 
-            if (changeType !== 'deletion') {
+            if (changeType !== 'deletion' && changeType !== 'insertion') {
               return false;
             }
 
             if (changeId && changeText) {
               const rect = changeEl.getBoundingClientRect();
               currentClickHandler(changeId, changeText, rect.right + 8, rect.top);
-              return true;
+              return changeType === 'deletion';
             }
           }
           return false;

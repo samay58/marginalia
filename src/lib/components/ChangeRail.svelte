@@ -4,16 +4,20 @@
    * @typedef {import('../utils/diff.js').DiffResult} DiffResult
    */
 
-  /** @type {{ changes?: Change[], trivialChanges?: Change[], trivialCount?: number, annotationChangeIds?: Set<string>, annotationCount?: number, selectedChangeId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void }} */
+  /** @type {{ changes?: Change[], groups?: any[], trivialChanges?: Change[], trivialCount?: number, annotationChangeIds?: Set<string>, annotationTargetIds?: Set<string>, annotationCount?: number, selectedChangeId?: string | null, selectedTargetId?: string | null, currentLine?: number | null, onSelectChange?: (change: Change, x: number, y: number) => void, onSelectGroup?: (group: any, x: number, y: number) => void }} */
   let {
     changes = [],
+    groups = [],
     trivialChanges = [],
     trivialCount = 0,
     annotationChangeIds = new Set(),
+    annotationTargetIds = new Set(),
     annotationCount = 0,
     selectedChangeId = null,
+    selectedTargetId = null,
     currentLine = /** @type {number | null} */ (1),
     onSelectChange = () => {},
+    onSelectGroup = () => {},
   } = $props();
 
   let trivialExpanded = $state(false);
@@ -22,16 +26,37 @@
     return [...changes].sort((left, right) => left.editedOffset - right.editedOffset);
   });
 
+  const sortedGroups = $derived.by(() => {
+    if (groups?.length) {
+      return [...groups].sort(
+        (left, right) =>
+          (left.descriptor?.editedOffsetStart ?? left.changes?.[0]?.editedOffset ?? 0) -
+          (right.descriptor?.editedOffsetStart ?? right.changes?.[0]?.editedOffset ?? 0)
+      );
+    }
+    return sortedChanges.map((change) => ({
+      id: change.id,
+      kind: 'single',
+      changeIds: [change.id],
+      changes: [change],
+      descriptor: {
+        afterExcerpt: change.type === 'insertion' ? change.text : '',
+        beforeExcerpt: change.type === 'deletion' ? change.text : '',
+        lineStart: change.location?.line ?? 1,
+      },
+    }));
+  });
+
   const sortedTrivial = $derived.by(() => {
     return [...trivialChanges].sort((left, right) => left.editedOffset - right.editedOffset);
   });
 
   const insertionCount = $derived.by(
-    () => sortedChanges.filter((change) => change.type === 'insertion').length
+    () => sortedGroups.flatMap((group) => group.changes || []).filter((change) => change.type === 'insertion').length
   );
 
   const deletionCount = $derived.by(
-    () => sortedChanges.filter((change) => change.type === 'deletion').length
+    () => sortedGroups.flatMap((group) => group.changes || []).filter((change) => change.type === 'deletion').length
   );
 
   /**
@@ -42,6 +67,26 @@
     if (change.type === 'deletion') return '\u2212';
     if (change.type === 'insertion') return '+';
     return '~';
+  }
+
+  /** @param {any} group */
+  function groupIcon(group) {
+    if (group.kind === 'replacement' || group.kind === 'adjacent_rewrite' || group.kind === 'block_rewrite') return '~';
+    const change = group.changes?.[0];
+    return typeIcon(change || {});
+  }
+
+  /** @param {any} group */
+  function groupText(group) {
+    const after = group.descriptor?.afterExcerpt || '';
+    const before = group.descriptor?.beforeExcerpt || '';
+    return after || before || group.changes?.map((/** @type {any} */ change) => change.text).join(' ') || '';
+  }
+
+  /** @param {any} group */
+  function isGroupAnnotated(group) {
+    if (annotationTargetIds.has(group.targetId)) return true;
+    return (group.changeIds || []).some((/** @type {string} */ id) => annotationChangeIds.has(id));
   }
 
   /**
@@ -63,6 +108,13 @@
     return Math.abs((change.location?.line ?? 1) - line) <= 1;
   }
 
+  /** @param {any} group */
+  function isGroupNearCursor(group) {
+    const line = typeof currentLine === 'number' ? currentLine : 1;
+    const groupLine = group.descriptor?.lineStart ?? group.changes?.[0]?.location?.line ?? 1;
+    return Math.abs(groupLine - line) <= 1;
+  }
+
   /**
    * @param {MouseEvent} event
    * @param {Change} change
@@ -73,6 +125,20 @@
     const rect = target.getBoundingClientRect();
     onSelectChange(change, rect.right + 8, rect.top);
   }
+
+  /**
+   * @param {MouseEvent} event
+   * @param {any} group
+   */
+  function handleGroupSelect(event, group) {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return;
+    const rect = target.getBoundingClientRect();
+    onSelectGroup(group, rect.right + 8, rect.top);
+    if (groups?.length) return;
+    const change = group.changes?.[0] || null;
+    if (change) onSelectChange(change, rect.right + 8, rect.top);
+  }
 </script>
 
 <aside class="change-rail">
@@ -80,7 +146,7 @@
     <div class="rail-heading">
       <span class="rail-kicker">Changes</span>
       <div class="rail-tallies">
-        <span>{sortedChanges.length} edits</span>
+      <span>{sortedGroups.length} edits</span>
         <span>{annotationCount} noted</span>
       </div>
     </div>
@@ -90,16 +156,17 @@
     </div>
   </header>
 
-  {#if sortedChanges.length === 0 && trivialCount === 0}
+  {#if sortedGroups.length === 0 && trivialCount === 0}
     <div class="empty-state">
       <p>No edits yet. Start editing to populate the review index.</p>
     </div>
   {:else}
     <ol class="change-list">
-      {#each sortedChanges as change}
-        {@const annotated = annotationChangeIds.has(change.id)}
-        {@const nearCursor = isNearCursor(change)}
-        {@const selected = selectedChangeId === change.id}
+      {#each sortedGroups as group}
+        {@const firstChange = group.changes?.[0]}
+        {@const annotated = isGroupAnnotated(group)}
+        {@const nearCursor = isGroupNearCursor(group)}
+        {@const selected = (selectedTargetId && group.targetId === selectedTargetId) || group.changeIds?.includes(selectedChangeId)}
         <li>
           <button
             type="button"
@@ -108,10 +175,14 @@
             class:annotated
             class:near-cursor={nearCursor && !selected}
             aria-pressed={selected}
-            onclick={(event) => handleSelect(event, change)}
+            onclick={(event) => handleGroupSelect(event, group)}
           >
-            <span class="type-icon" class:deletion={change.type === 'deletion'} class:insertion={change.type === 'insertion'}>{typeIcon(change)}</span>
-            <span class="change-text">{truncate(change.text, 40)}</span>
+            <span
+              class="type-icon"
+              class:deletion={firstChange?.type === 'deletion'}
+              class:insertion={firstChange?.type === 'insertion'}
+            >{groupIcon(group)}</span>
+            <span class="change-text">{truncate(groupText(group), 40)}</span>
             {#if annotated}
               <span class="annotation-dot"></span>
             {/if}

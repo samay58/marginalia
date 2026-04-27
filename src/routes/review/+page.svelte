@@ -24,6 +24,7 @@
     annotations,
     annotationEntries,
     annotatedChangeIds,
+    annotatedTargetIds,
     startTime,
     initializeWithContent,
     restoreFromSnapshot,
@@ -37,12 +38,28 @@
     updatePlainText,
     editedPlainText,
     selectedChangeId,
+    selectedTargetId,
     selectedChange,
+    selectedTarget,
     selectedAnnotation,
     substantiveChanges,
+    substantiveChangeGroups,
     trivialChanges,
     trivialChangeCount,
     visibleChanges,
+    reviewTargets,
+    resolvedReviewTargets,
+    rationaleDrafts,
+    documentEpoch,
+    diffEpoch,
+    renderEpoch,
+    diffStatus,
+    ensureTargetForChange,
+    setSelectedTarget,
+    startRationaleForTarget,
+    updateRationaleDraftText,
+    discardRationaleDraft,
+    setReviewStatus,
     setSelectedChange,
     clearSelectedChange,
   } from '$lib/stores/app.js';
@@ -54,6 +71,7 @@
 
   // DialKit: live-tunable desk layout parameters
   const DESK_PANEL_ID = 'review-desk';
+  /** @type {Record<string, [number, number, number, number]>} */
   const DESK_CONFIG = {
     railWidth: [240, 160, 360, 4],
     rightWidth: [304, 200, 440, 4],
@@ -97,6 +115,7 @@
   let popoverText = $state('');
   let popoverDraft = $state('');
   let popoverAnnotationId = $state('');
+  let popoverTargetId = $state('');
   let isDark = $state(false);
   /** @type {any} */
   let editorRef = $state(null);
@@ -105,6 +124,8 @@
   let selectedAnnotationId = $state(/** @type {string | null} */ (null));
   let composerOpen = $state(false);
   let composerDraft = $state('');
+  let composerDraftId = $state('');
+  let composerTargetId = $state('');
   /** @type {Array<{ path: string, name: string, content: string }>} */
   let referenceFiles = $state([]);
   let activeReferenceIndex = $state(0);
@@ -202,6 +223,7 @@
    */
   function enterDegradedMode(reason, detail = '') {
     degradedMode = true;
+    setReviewStatus('degraded');
     const normalized = detail ? `${reason}: ${detail}` : reason;
     if (!degradedReasons.includes(normalized)) {
       degradedReasons = [...degradedReasons, normalized];
@@ -284,6 +306,7 @@
   function clearPopoverState() {
     popoverVisible = false;
     popoverChangeId = '';
+    popoverTargetId = '';
     popoverText = '';
     popoverDraft = '';
     popoverAnnotationId = '';
@@ -293,6 +316,8 @@
     if (composerOpen) {
       return {
         surface: 'column',
+        target_id: composerTargetId || $selectedTargetId || selectedAnnotationEntry?.annotation.targetId || null,
+        draft_id: composerDraftId || null,
         change_id: $selectedChangeId || selectedAnnotationEntry?.change?.id || null,
         annotation_id: selectedAnnotationId || selectedAnnotationEntry?.annotation.id || null,
         text: $selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || '',
@@ -303,6 +328,7 @@
     if (popoverVisible && popoverChangeId) {
       return {
         surface: 'popover',
+        target_id: popoverTargetId || null,
         change_id: popoverChangeId,
         annotation_id: popoverAnnotationId || null,
         text: popoverText,
@@ -335,8 +361,15 @@
         edited_plain_text: $editedPlainText,
         general_notes: $generalNotes,
         annotations: $annotations,
+        review_targets: $reviewTargets,
+        rationale_drafts: $rationaleDrafts,
         selected_change_id: $selectedChangeId,
+        selected_target_id: $selectedTargetId,
         selected_annotation_id: selectedAnnotationId,
+        document_epoch: $documentEpoch,
+        diff_epoch: $diffEpoch,
+        render_epoch: $renderEpoch,
+        diff_status: $diffStatus,
         pending_annotation: pendingAnnotation,
         session_drawer_open: notesExpanded,
         degraded_mode: degradedMode,
@@ -446,6 +479,8 @@
     referenceDrawerOpen = false;
     composerOpen = false;
     composerDraft = '';
+    composerDraftId = '';
+    composerTargetId = '';
     selectedAnnotationId = null;
     clearPopoverState();
     clearSelectedChange();
@@ -621,13 +656,19 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     // Keystroke-driven autosave is handled directly in handleContentChange.
     $generalNotes;
     $annotations;
+    $reviewTargets;
+    $rationaleDrafts;
     $selectedChangeId;
+    $selectedTargetId;
     selectedAnnotationId;
     notesExpanded;
     composerOpen;
     composerDraft;
+    composerDraftId;
+    composerTargetId;
     popoverVisible;
     popoverChangeId;
+    popoverTargetId;
     popoverDraft;
     popoverAnnotationId;
     if (!sessionId || !snapshotPath || !hasInitialDocument || isHydratingSnapshot) return;
@@ -834,8 +875,15 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       editedPlainText: snapshot.edited_plain_text || '',
       generalNotes: snapshot.general_notes || '',
       annotations: snapshot.annotations || [],
+      reviewTargets: snapshot.review_targets || [],
+      rationaleDrafts: snapshot.rationale_drafts || {},
       startedAt: snapshot.started_at || null,
       selectedChangeId: snapshot.selected_change_id || null,
+      selectedTargetId: snapshot.selected_target_id || null,
+      documentEpoch: snapshot.document_epoch || 0,
+      diffEpoch: snapshot.diff_epoch || 0,
+      renderEpoch: snapshot.render_epoch || 0,
+      diffStatus: snapshot.diff_status || 'clean',
     });
 
     selectedAnnotationId =
@@ -856,8 +904,16 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       if (typeof pendingAnnotation.change_id === 'string' && pendingAnnotation.change_id.length > 0) {
         setSelectedChange(pendingAnnotation.change_id);
       }
+      if (typeof pendingAnnotation.target_id === 'string' && pendingAnnotation.target_id.length > 0) {
+        composerTargetId = pendingAnnotation.target_id;
+        setSelectedTarget(pendingAnnotation.target_id);
+      }
+      if (typeof pendingAnnotation.draft_id === 'string' && pendingAnnotation.draft_id.length > 0) {
+        composerDraftId = pendingAnnotation.draft_id;
+      }
       if (compactLayout && pendingAnnotation.surface === 'popover' && pendingAnnotation.change_id) {
         popoverChangeId = pendingAnnotation.change_id;
+        popoverTargetId = pendingAnnotation.target_id || '';
         popoverText = pendingAnnotation.text || '';
         popoverDraft = pendingAnnotation.draft;
         popoverAnnotationId = pendingAnnotation.annotation_id || '';
@@ -915,6 +971,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   }
 
   async function handleDone() {
+    setReviewStatus('finalizing');
     await persistSnapshot('done-invoked');
     const changesMade = $hasChanges;
     const hasNotes = typeof $generalNotes === 'string' && $generalNotes.trim().length > 0;
@@ -943,6 +1000,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     // Prefer plain text (what the user sees) to keep change IDs aligned with annotations.
     const originalTextForDiff = $originalPlainText || $originalContent || '';
     const editedTextForDiff = $editedPlainText || $editedContent || '';
+    /** @type {any} */
     let diffForBundle = $diffResult;
     if (!$diffResult || (changesMade && $diffResult.changes.length === 0)) {
       try {
@@ -983,6 +1041,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       diffResult: diffForBundle,
       semanticChanges,
       annotations: $annotationEntries,
+      reviewTargets: $resolvedReviewTargets,
       generalNotes: mergedGeneralNotes,
       startTime: $startTime,
       principlesPath: cliPrinciplesPath || null,
@@ -1016,6 +1075,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       await deactivateSession('reviewed-with-feedback');
       await closeWindowSafely();
     } catch (e) {
+      setReviewStatus(degradedMode ? 'degraded' : 'reviewing');
       console.error('Error saving bundle:', e);
       // Write error status
       if (cliOutPath) {
@@ -1092,7 +1152,14 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   /** @param {string} text */
   function handleInitialRender(text) {
-    setOriginalPlainText(text);
+    if (!text) return;
+    const isPristineDocument =
+      $editedContent === $originalContent && $annotations.length === 0 && !$generalNotes;
+    if (!$originalPlainText || isPristineDocument) {
+      setOriginalPlainText(text);
+    } else if (!$editedPlainText) {
+      updatePlainText(text);
+    }
   }
 
   /** @param {number} line */
@@ -1135,9 +1202,14 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     });
   }
 
-  function closeComposer() {
+  function closeComposer({ discardDraft = true } = {}) {
+    if (discardDraft && composerDraftId) {
+      discardRationaleDraft(composerDraftId);
+    }
     composerOpen = false;
     composerDraft = '';
+    composerDraftId = '';
+    composerTargetId = '';
   }
 
   /**
@@ -1176,6 +1248,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
    */
   function openChangePopover(change, x = NaN, y = NaN) {
     if (!change) return;
+    const target = ensureTargetForChange(change);
     const existingAnnotation = $annotationEntries.find(
       (entry) => entry.status === 'active' && entry.change?.id === change.id
     );
@@ -1187,6 +1260,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     }
 
     popoverChangeId = change.id;
+    popoverTargetId = target?.id || '';
     popoverText = change.text;
     popoverDraft = existingAnnotation?.annotation.rationale || '';
     popoverAnnotationId = existingAnnotation?.annotation.id || '';
@@ -1227,6 +1301,28 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   function handleRailChangeSelect(change, x, y) {
     if (!change) return;
     selectChange(change, { x, y, openPopover: compactLayout });
+  }
+
+  /** @param {any} group @param {number} x @param {number} y */
+  function handleRailGroupSelect(group, x, y) {
+    const change = group?.changes?.[0] || null;
+    if (!change) return;
+    const target = ensureTargetForChange(change);
+    if (target) {
+      setSelectedTarget(target.id);
+    }
+    selectChange(change, { x, y, openPopover: compactLayout });
+  }
+
+  /** @param {any} group */
+  function targetIdForGroup(group) {
+    return (
+      $reviewTargets.find((target) =>
+        (group.changeIds || []).some((/** @type {string} */ changeId) =>
+          target.changeIds?.includes(changeId)
+        )
+      )?.id || null
+    );
   }
 
   /** @param {string} changeId @param {string} text @param {number} x @param {number} y */
@@ -1295,8 +1391,19 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     const activeChange = $selectedChange || selectedAnnotationEntry?.change || null;
     if (!activeChange && !selectedAnnotationEntry) return;
 
+    const target =
+      (selectedAnnotationEntry?.annotation.targetId &&
+        $reviewTargets.find((item) => item.id === selectedAnnotationEntry.annotation.targetId)) ||
+      $selectedTarget ||
+      (activeChange ? ensureTargetForChange(activeChange) : null);
+    if (!target) return;
+
+    const initialDraft = selectedAnnotationEntry?.annotation.rationale || '';
+    const draft = startRationaleForTarget(target.id, initialDraft);
     composerOpen = true;
-    composerDraft = selectedAnnotationEntry?.annotation.rationale || '';
+    composerDraft = initialDraft;
+    composerTargetId = target.id;
+    composerDraftId = draft?.id || '';
 
     if (activeChange) {
       selectedAnnotationId =
@@ -1315,6 +1422,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   /** @param {string} value */
   function handleComposeDraftInput(value) {
     composerDraft = value;
+    if (composerDraftId) {
+      updateRationaleDraftText(composerDraftId, value);
+    }
   }
 
   function handleCancelCompose() {
@@ -1327,30 +1437,44 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     const matchedRule = writingRuleMatcher ? writingRuleMatcher(rationale) : null;
     const currentChange = $selectedChange || selectedAnnotationEntry?.change || null;
+    const target =
+      (composerTargetId && $reviewTargets.find((item) => item.id === composerTargetId)) ||
+      $selectedTarget ||
+      (currentChange ? ensureTargetForChange(currentChange) : null);
 
     if (selectedAnnotationEntry) {
       const patch = {
+        targetId: target?.id || selectedAnnotationEntry.annotation.targetId || null,
+        targetKind: target?.kind || selectedAnnotationEntry.annotation.targetKind || null,
+        targetSnapshot: target?.descriptor || selectedAnnotationEntry.annotation.targetSnapshot || null,
         rationale,
         matchedRule,
+        resolution: {
+          status: target?.status === 'stale' ? 'stale' : 'active',
+          strategy: target?.resolution?.strategy || 'exact',
+          confidence: target?.resolution?.confidence ?? 1,
+          staleReason: target?.resolution?.staleReason || null,
+        },
         updatedAt: new Date().toISOString(),
       };
       updateAnnotation(selectedAnnotationEntry.annotation.id, patch);
       selectedAnnotationId = selectedAnnotationEntry.annotation.id;
-      closeComposer();
+      closeComposer({ discardDraft: true });
       return;
     }
 
-    if (!currentChange) return;
+    if (!currentChange && !target) return;
 
     const annotation = createAnnotationRecord({
       change: currentChange,
       editedText: $editedPlainText || $editedContent || '',
       rationale,
       matchedRule,
+      reviewTarget: target,
     });
     addAnnotation(annotation);
     selectedAnnotationId = annotation.id;
-    closeComposer();
+    closeComposer({ discardDraft: true });
   }
 
   function handleRemoveSelected() {
@@ -1373,7 +1497,8 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     const next = reanchorAnnotation(
       selectedAnnotationEntry.annotation,
       $selectedChange,
-      $editedPlainText || $editedContent || ''
+      $editedPlainText || $editedContent || '',
+      $selectedTarget || ensureTargetForChange($selectedChange)
     );
     updateAnnotation(selectedAnnotationEntry.annotation.id, next);
     selectedAnnotationId = next.id;
@@ -1401,11 +1526,23 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       ? $annotationEntries.find((entry) => entry.annotation.id === popoverAnnotationId) || null
       : null;
     const change = $visibleChanges.find((entry) => entry.id === changeId) || null;
+    const target =
+      (popoverTargetId && $reviewTargets.find((entry) => entry.id === popoverTargetId)) ||
+      (change ? ensureTargetForChange(change) : null);
 
     if (existing) {
       updateAnnotation(existing.annotation.id, {
+        targetId: target?.id || existing.annotation.targetId || null,
+        targetKind: target?.kind || existing.annotation.targetKind || null,
+        targetSnapshot: target?.descriptor || existing.annotation.targetSnapshot || null,
         rationale,
         matchedRule,
+        resolution: {
+          status: target?.status === 'stale' ? 'stale' : 'active',
+          strategy: target?.resolution?.strategy || 'exact',
+          confidence: target?.resolution?.confidence ?? 1,
+          staleReason: target?.resolution?.staleReason || null,
+        },
         updatedAt: new Date().toISOString(),
       });
       selectedAnnotationId = existing.annotation.id;
@@ -1415,6 +1552,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         editedText: $editedPlainText || $editedContent || '',
         rationale,
         matchedRule,
+        reviewTarget: target,
       });
       addAnnotation(annotation);
       selectedAnnotationId = annotation.id;
@@ -1546,13 +1684,20 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   <main class="desk" class:compact={compactLayout}>
     <ChangeRail
       changes={$substantiveChanges}
+      groups={$substantiveChangeGroups.map((group) => ({
+        ...group,
+        targetId: targetIdForGroup(group),
+      }))}
       trivialChanges={$trivialChanges}
       trivialCount={$trivialChangeCount}
       annotationChangeIds={$annotatedChangeIds}
+      annotationTargetIds={$annotatedTargetIds}
       annotationCount={$annotationEntries.length}
       selectedChangeId={$selectedChangeId}
+      selectedTargetId={$selectedTargetId}
       currentLine={$currentLine}
       onSelectChange={handleRailChangeSelect}
+      onSelectGroup={handleRailGroupSelect}
     />
 
     <div class="editor-column">
@@ -1627,6 +1772,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     {editCount}
     annotationCount={$annotationEntries.length}
     autosaveLabel={statusAutosaveLabel}
+    diffStatus={$diffStatus}
     {degradedMode}
     drawerOpen={notesExpanded}
     {compactLayout}
@@ -1724,8 +1870,9 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
   .app {
     height: 100vh;
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     background: var(--canvas-paper);
     box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.04);
   }
@@ -1855,6 +2002,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   }
 
   .desk {
+    flex: 1 1 auto;
     min-height: 0;
     display: grid;
     grid-template-columns: var(--desk-rail-width) minmax(0, 1fr) var(--desk-right-width);

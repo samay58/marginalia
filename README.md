@@ -66,7 +66,7 @@ Default trigger rules:
 - files ending in `-draft.md`
 - files containing `<!-- REVIEW -->`
 
-If your CLI supports post-write hooks, call `marginalia open <file> --out <status-path>` and feed the resulting `summary_for_agent.md` back into the agent.
+If your CLI supports post-write hooks, call `marginalia open <file> --out <status-path>` and feed the resulting `summary_for_agent.md` back into the agent. See [docs/hooks.md](docs/hooks.md) for Claude/Codex adapter notes.
 
 ## Usage
 
@@ -108,6 +108,12 @@ Each bundle contains:
 
 `summary_for_agent.md` is the primary agent input. The other files exist for exactness, automation, and debugging.
 
+Current schema markers:
+
+- `changes.json.bundle_format_version = "3.1"`
+- `annotations.json.schema_version = "3.1"`
+- `provenance.json.schema_version = "1.1"`
+
 ## Shortcuts
 
 | Key | Action |
@@ -128,6 +134,8 @@ pnpm install
 pnpm tauri dev
 pnpm run check:diff
 pnpm run check:annotations
+pnpm run check:targets
+pnpm run check:render
 pnpm run check:semantic
 pnpm run check:bundle
 pnpm run check:hook

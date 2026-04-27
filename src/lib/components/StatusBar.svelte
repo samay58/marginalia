@@ -1,9 +1,10 @@
 <script>
-  /** @type {{ editCount?: number, annotationCount?: number, autosaveLabel?: string, degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
+  /** @type {{ editCount?: number, annotationCount?: number, autosaveLabel?: string, diffStatus?: 'clean' | 'pending' | 'stale' | 'failed', degradedMode?: boolean, drawerOpen?: boolean, compactLayout?: boolean, hasReferences?: boolean, onToggleDrawer?: () => void, onToggleReference?: () => void }} */
   let {
     editCount = 0,
     annotationCount = 0,
     autosaveLabel = '',
+    diffStatus = 'clean',
     degradedMode = false,
     drawerOpen = false,
     compactLayout = false,
@@ -26,6 +27,11 @@
   <div class="status-health">
     {#if autosaveLabel}
       <span class="health-pill" class:warning={degradedMode}>{autosaveLabel}</span>
+    {/if}
+    {#if diffStatus !== 'clean'}
+      <span class="health-pill pending" class:warning={diffStatus === 'stale' || diffStatus === 'failed'}>
+        diff {diffStatus}
+      </span>
     {/if}
     {#if degradedMode}
       <span class="health-pill warning">Degraded mode</span>
@@ -63,14 +69,15 @@
 <style>
   .status-bar {
     height: var(--status-bar-height);
+    flex: 0 0 var(--status-bar-height);
     display: grid;
     grid-template-columns: auto auto 1fr;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-3);
     padding: 0 var(--desk-padding-x);
     border-top: 1px solid color-mix(in srgb, var(--chrome-border) 95%, transparent);
-    background: var(--status-bg);
-    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--paper-bright) 84%, var(--paper-matte));
+    box-shadow: 0 -1px 6px rgba(44, 40, 37, 0.07);
   }
 
   .status-summary,
@@ -78,14 +85,14 @@
   .status-actions {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     min-width: 0;
   }
 
   .status-summary {
     font-family: var(--font-ui);
-    font-size: var(--text-status);
-    color: var(--ink-ghost);
+    font-size: 0.72rem;
+    color: var(--ink-faded);
     white-space: nowrap;
   }
 
@@ -95,10 +102,10 @@
 
   .health-pill {
     border-radius: 999px;
-    padding: 0.2rem 0.5rem;
+    padding: 0.12rem 0.4rem;
     border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     color: var(--ink-faded);
     white-space: nowrap;
   }
@@ -109,21 +116,27 @@
     background: color-mix(in srgb, var(--slop-bg) 80%, transparent);
   }
 
+  .health-pill.pending:not(.warning) {
+    color: var(--insert-ink);
+    border-color: color-mix(in srgb, var(--insert-line) 75%, transparent);
+    background: color-mix(in srgb, var(--insert-bg) 72%, transparent);
+  }
+
   .status-actions {
     justify-self: end;
-    gap: var(--space-4);
+    gap: var(--space-3);
     white-space: nowrap;
   }
 
   .status-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.25rem;
     background: transparent;
     border: none;
     color: var(--ink-ghost);
     font-family: var(--font-ui);
-    font-size: var(--text-status);
+    font-size: 0.72rem;
     padding: 0;
   }
 
@@ -143,13 +156,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.85rem;
+    min-width: 1.55rem;
     border-radius: 4px;
-    padding: 0.15rem 0.4rem;
-    background: color-mix(in srgb, var(--paper-matte) 92%, transparent);
+    padding: 0.08rem 0.3rem;
+    background: color-mix(in srgb, var(--paper-matte) 96%, var(--paper-bright));
     color: var(--ink-faded);
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
   }
 
@@ -157,8 +170,8 @@
     .status-bar {
       grid-template-columns: 1fr;
       height: auto;
-      padding-top: 0.5rem;
-      padding-bottom: 0.5rem;
+      padding-top: 0.4rem;
+      padding-bottom: 0.4rem;
     }
 
     .status-health {
@@ -168,7 +181,7 @@
     .status-actions {
       justify-self: start;
       flex-wrap: wrap;
-      gap: var(--space-3);
+      gap: var(--space-2);
     }
   }
 </style>

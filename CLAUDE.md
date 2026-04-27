@@ -31,6 +31,8 @@ Validation (run all before shipping):
 ```bash
 pnpm run check:diff         # diff ID retention
 pnpm run check:annotations  # annotation model invariants
+pnpm run check:targets      # durable review target invariants
+pnpm run check:render       # pending/stale diff render decisions
 pnpm run check:semantic     # semantic diff correctness
 pnpm run check:bundle       # bundle artifact completeness
 pnpm run check:hook         # hook async queue behavior
@@ -64,18 +66,22 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 ### Core data flow
 
 1. Rust reads the markdown file and exposes it via Tauri commands.
-2. The frontend stores original and edited markdown plus their plain-text projections (`src/lib/stores/app.js`).
-3. Typing updates `editedPlainText` immediately. Expensive derived stores (diff, annotation resolution) read from `debouncedEditedPlainText`, which lags by ~120ms to batch keystrokes.
+2. The frontend stores the canonical review session in `src/lib/stores/review-session.js`; `src/lib/stores/app.js` is only a compatibility facade.
+3. Typing updates `editedPlainText` immediately, increments `documentEpoch`, and marks the diff pending. Expensive derived stores read from `debouncedEditedPlainText`, which lags by ~120ms to batch keystrokes.
 4. Diffing runs on the plain-text projections (what the user actually sees), not raw markdown.
-5. Annotations resolve against the latest diff using a conservative policy: exact match, heuristic reattachment, or stale.
-6. On finalize, the frontend generates the bundle and Rust persists it to disk.
+5. Review targets are the identity layer. Diffs and change groups are views over document snapshots.
+6. Annotations attach to durable review targets and resolve using a conservative policy: exact match, heuristic reattachment, or stale.
+7. On finalize, the frontend generates the bundle and Rust persists it to disk.
 
 ### Primary files
 
 - `src/routes/review/+page.svelte`: app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
-- `src/lib/stores/app.js`: document state, plain-text projections, debounced diff chain, trivial/substantive change split
+- `src/lib/stores/review-session.js`: document state, epochs, target state, rationale drafts, debounced diff chain, trivial/substantive change split
+- `src/lib/stores/app.js`: compatibility facade for existing imports
 - `src/lib/utils/diff.js`: stable text diff with ID retention across edits
+- `src/lib/utils/review-targets.js`: durable review targets, change groups, target resolution, rationale drafts
 - `src/lib/utils/annotations.js`: annotation records, target metadata, reattachment scoring, stale resolution
+- `src/lib/utils/diff-render-state.js`: diff snapshot hashes and render update decisions
 - `src/lib/utils/bundle.js`: bundle generation (format `3.0`)
 - `src/lib/components/Editor.svelte`: Milkdown host, persistent note markers from resolved annotations
 - `src/lib/components/ChangeRail.svelte`: left-side change index. Substantive changes shown with type icons; trivial edits collapsed at the bottom.
@@ -85,8 +91,9 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 
 ### Annotation model
 
+- `reviewTargets` is the durable identity layer for change, change group, range, semantic, and global feedback.
 - `annotations` is an array of stable records, not a map keyed by change ID.
-- Each record stores target metadata: prior change ID, excerpt, line context, block key.
+- Each record stores target metadata: target ID, target kind, prior change ID, excerpt, line context, block key, target snapshot, and resolution metadata.
 - Resolution is conservative: exact match first, heuristic reattachment second, otherwise `stale`.
 - Stale notes must never silently drift to a new edit.
 
@@ -124,9 +131,9 @@ Bundles are written to `~/.marginalia/bundles/[timestamp]_[filename]/`.
 Contents:
 
 - `original.md`, `final.md`
-- `changes.json` (format `3.0`), `annotations.json` (schema `3.0`)
+- `changes.json` (format `3.1`), `annotations.json` (schema `3.1`)
 - `changes.patch`
-- `provenance.json` (schema `1.0`)
+- `provenance.json` (schema `1.1`)
 - `summary_for_agent.md` (primary agent input)
 
 ## Hook system

@@ -15,11 +15,14 @@ Every review session should feel trustworthy:
 ## Edit interaction contract
 
 - Diffing runs on rendered plain text.
+- Diffs are a view over document snapshots, not the identity layer for rationale.
+- Diff snapshots carry document/diff epochs and text hashes.
 - Visible changes exclude whitespace-only fragments that are not shown inline.
 - Clicking inserted text must behave like normal editing.
 - Only deletion affordances are click-intercepted in the manuscript.
 - Selecting an edit must not automatically focus or reopen the rationale composer.
 - Compose mode is explicit: button press or `⌘/`.
+- If the current editor text does not match the latest diff snapshot, the manuscript keeps the last stable decorations while the diff is pending.
 
 ## Annotation contract
 
@@ -36,6 +39,8 @@ Marginalia must never silently move a note when the remap is ambiguous.
 ### What makes a note durable
 
 - stable annotation ID
+- stable review target ID
+- target kind and target snapshot
 - prior change ID
 - excerpt
 - line hint
@@ -84,9 +89,9 @@ Current output:
 
 Version markers:
 
-- `changes.json.bundle_format_version = "3.0"`
-- `annotations.json.schema_version = "3.0"`
-- `provenance.json.schema_version = "1.0"`
+- `changes.json.bundle_format_version = "3.1"`
+- `annotations.json.schema_version = "3.1"`
+- `provenance.json.schema_version = "1.1"`
 
 ## Hook contract
 
@@ -108,12 +113,14 @@ Run all of these before shipping:
 
 1. `pnpm run check:diff`
 2. `pnpm run check:annotations`
-3. `pnpm run check:semantic`
-4. `pnpm run check:bundle`
-5. `pnpm run check:hook`
-6. `pnpm run check:lint`
-7. `pnpm run check`
-8. `pnpm run build`
+3. `pnpm run check:targets`
+4. `pnpm run check:render`
+5. `pnpm run check:semantic`
+6. `pnpm run check:bundle`
+7. `pnpm run check:hook`
+8. `pnpm run check:lint`
+9. `pnpm run check`
+10. `pnpm run build`
 
 ## Known hard problems
 
