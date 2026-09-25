@@ -1,6 +1,6 @@
 {
   "name": "tauri-app",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "",
   "type": "module",
   "scripts": {
@@ -12,24 +12,20 @@
     "check:targets": "node scripts/check-review-targets.mjs",
     "check:plain": "node scripts/check-plain-text-baseline.mjs",
     "check:render": "node scripts/check-diff-render-state.mjs",
-    "check:ui": "node scripts/check-ui-layout-guards.mjs",
+    "check:tokens": "node scripts/check-css-tokens.mjs",
     "check:semantic": "node scripts/check-semantic-diff.mjs",
     "check:bundle": "node scripts/check-bundle-artifacts.mjs",
     "check:hook": "bash scripts/check-hook-async-queue.sh",
-    "check:lint": "node scripts/check-lint-model.mjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch",
     "tauri": "tauri",
     "tauri:build:app": "tauri build --bundles app",
-    "tauri:build:dmg": "tauri build --bundles dmg"
+    "tauri:build:dmg": "tauri build --bundles dmg",
+    "verify": "pnpm run -s check:diff && pnpm run -s check:annotations && pnpm run -s check:targets && pnpm run -s check:plain && pnpm run -s check:render && pnpm run -s check:tokens && pnpm run -s check:semantic && pnpm run -s check:bundle && pnpm run -s check:hook && pnpm run -s check && pnpm run -s build"
   },
   "license": "MIT",
   "dependencies": {
-    "@fontsource/eb-garamond": "^5.3.0",
-    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@fontsource/im-fell-english": "^5.3.0",
-    "@fontsource/old-standard-tt": "^5.3.0",
     "@milkdown/core": "^7.18.0",
     "@milkdown/ctx": "^7.18.0",
     "@milkdown/plugin-listener": "^7.18.0",
@@ -39,9 +35,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-opener": "^2",
-    "dialkit": "^1.1.0",
-    "diff-match-patch": "^1.0.5",
-    "motion": "^12.36.0"
+    "diff-match-patch": "^1.0.5"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",

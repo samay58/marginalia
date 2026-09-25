@@ -1,115 +1,94 @@
-/* =============================================================================
-   MARGINALIA V2 DESIGN TOKENS
-   Locked to docs/design/DESIGN_REFERENCE.md. Do not override inline.
-   ============================================================================= */
+/* Quiet monochrome tokens. Hierarchy comes from the alpha ladder, not colour.
+   The single accent is a verb: the primary action, live insertions, focus. */
 
 :root {
-  /* --- Colors ------------------------------------------------------------- */
-  --desktop-ground: #2E6E65;
-  --window-body: #E8E4D5;
-  --paper: #ECE3C8;
-  --navy-chrome: #1B2B5E;
-  --navy-shadow: #0B1230;
-  --wordmark-teal: #1F7A6E;
-  --chrome-highlight: #F5F2E4;
-  --chrome-shadow: #6B6A62;
-  --deep-shadow: #1A1612;
-  --button-face: #C9C3B0;
-  --tab-inactive: #C9C3B0;
-  --ink: #1A1612;
-  --muted: #5B5A55;
-  --link: #1B3EAC;
-  --traffic-red: #E35145;
-  --traffic-yellow: #E0B137;
-  --traffic-blue: #3B6FCF;
-  --chip-green-bg: #CEE2C2;
-  --chip-green-border: #3D6B4A;
-  --chip-green-text: #2B4E35;
-  --chip-red-bg: #E8C4C4;
-  --chip-red-border: #8A3838;
-  --chip-red-text: #8A3838;
-  --led-green: #58A667;
-  --led-highlight: #C7E8CB;
-  --rationale-well-bg: #F5F2E4;
+  color-scheme: light dark;
 
-  /* --- Legacy .desk grid aliases --------------------------------------------
-     The pre-v2 review surface drove its three-column grid from --desk-* tokens
-     that lived in the old app.css. Phase 2 removed app.css and those tokens,
-     which silently invalidated the grid-template-columns value in
-     src/routes/review/+page.svelte and collapsed the Rationale panel under
-     the rail + editor. Restoring the tokens as aliases onto v2 values fixes
-     alignment without restructuring the grid.
-     -------------------------------------------------------------------- */
-  --desk-rail-width: var(--rail-w);
-  --desk-right-width: var(--rationale-w);
-  --desk-gap: 0px;
-  --desk-padding-x: 0px;
-  --header-height: var(--appheader-h);
-  --status-bar-height: var(--bottombar-h);
+  --canvas: #ffffff;
+  --surface: #ffffff;
+  --ink: #000000;
+  --ink-2: rgb(0 0 0 / 64%);
+  --ink-3: rgb(0 0 0 / 44%);
+  --rule: rgb(0 0 0 / 10%);
+  --rule-2: rgb(0 0 0 / 18%);
+  --hover: rgb(0 0 0 / 5%);
+  --press: rgb(0 0 0 / 9%);
+  --scrim: rgb(0 0 0 / 24%);
 
-  /* --- Revision marks (chip-family muted) --------------------------------- */
-  --insert-ink: #2B4E35;
-  --insert-bg: rgba(61, 107, 74, 0.12);
-  --insert-line: #3D6B4A;
-  --delete-ink: #8A3838;
-  --delete-bg: rgba(138, 56, 56, 0.1);
-  --delete-line: #8A3838;
-  --struck-bg: var(--delete-bg);
-  --struck-text: var(--delete-ink);
-  --struck-line: var(--delete-line);
+  --accent: #6e5c9e;
+  --accent-soft: rgb(110 92 158 / 12%);
+  --on-accent: #ffffff;
+  --danger: #b3261e;
 
-  /* --- Legacy token aliases for existing decoration code ------------------ */
-  --accent-subtle: var(--insert-bg);
-  --paper-bright: var(--chrome-highlight);
+  --insert-ink: var(--accent);
+  --insert-bg: rgb(110 92 158 / 8%);
+  --insert-line: rgb(110 92 158 / 55%);
+  --delete-ink: var(--ink-3);
+  --delete-line: rgb(0 0 0 / 40%);
+  --selected-bg: rgb(110 92 158 / 14%);
 
-  /* --- Typography --------------------------------------------------------- */
-  --font-chrome: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-wordmark: "EB Garamond", Palatino, Georgia, serif;
-  --font-h: "Old Standard TT", "Source Serif 4", Georgia, serif;
-  --font-body: "IM Fell English", "Old Standard TT", Georgia, serif;
+  --shadow-pop: 0 0 0 1px var(--rule), 0 12px 32px rgb(0 0 0 / 12%);
 
-  /* --- Spacing scale ------------------------------------------------------ */
-  --space-0-5: 2px;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-code: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-manuscript: 17px;
+
   --space-1: 4px;
-  --space-1-5: 6px;
   --space-2: 8px;
-  --space-2-5: 10px;
   --space-3: 12px;
-  --space-3-5: 14px;
-  --space-4-5: 18px;
+  --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
-  --space-9: 36px;
-  --space-16: 64px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
 
-  /* --- Layout metrics ----------------------------------------------------- */
-  --window-pad: 32px;
-  --titlebar-h: 50px;
-  --appheader-h: 58px;
-  --tabstrip-h: 38px;
-  --bottombar-h: 50px;
-  --rail-w: 244px;
-  --rationale-w: 352px;
-  --rationale-inset: 12px;
+  --radius: 8px;
+  --radius-sm: 6px;
 
-  /* --- Bevel recipes ------------------------------------------------------ */
-  --bevel-raised-1:
-    inset 1px 1px 0 var(--chrome-highlight),
-    inset -1px -1px 0 var(--chrome-shadow);
-  --bevel-sunken-1:
-    inset 1px 1px 0 var(--chrome-shadow),
-    inset -1px -1px 0 var(--chrome-highlight);
-  --bevel-window-2:
-    inset 2px 2px 0 var(--chrome-highlight),
-    inset -2px -2px 0 var(--chrome-shadow),
-    0 0 0 1px var(--deep-shadow);
-  --bevel-raised-chip:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.6),
-    inset -1px -1px 0 rgba(0, 0, 0, 0.15);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 360ms;
+  --transition-fast: var(--dur-fast) var(--ease);
 
-  /* --- Text colors (role-indexed) ----------------------------------------- */
-  --text-body: var(--ink);
-  --text-muted: var(--muted);
-  --text-link: var(--link);
-  --text-chrome-on-navy: var(--chrome-highlight);
+  /* Layout. The top bar clears the native traffic lights (see tauri.conf.json). */
+  --topbar-h: 52px;
+  --topbar-inset: 84px;
+  --bottombar-h: 40px;
+  --rail-w: 248px;
+  --rationale-w: 340px;
+  --measure: 68ch;
+  --gutter-width: 3.5rem;
+  --line-height: 1.65;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #141414;
+    --surface: #1c1c1c;
+    --ink: #ffffff;
+    --ink-2: rgb(255 255 255 / 68%);
+    --ink-3: rgb(255 255 255 / 46%);
+    --rule: rgb(255 255 255 / 10%);
+    --rule-2: rgb(255 255 255 / 18%);
+    --hover: rgb(255 255 255 / 6%);
+    --press: rgb(255 255 255 / 10%);
+    --scrim: rgb(0 0 0 / 48%);
+
+    --accent: #a898d6;
+    --accent-soft: rgb(168 152 214 / 16%);
+    --on-accent: #141414;
+    --danger: #f2877f;
+
+    --insert-bg: rgb(168 152 214 / 10%);
+    --insert-line: rgb(168 152 214 / 60%);
+    --delete-line: rgb(255 255 255 / 40%);
+    --selected-bg: rgb(168 152 214 / 18%);
+
+    --shadow-pop: 0 0 0 1px var(--rule-2), 0 12px 32px rgb(0 0 0 / 40%);
+  }
 }

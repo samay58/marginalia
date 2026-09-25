@@ -8,34 +8,22 @@
   } = $props();
 </script>
 
-<aside class="reference-pane glass-surface glass-surface-static">
-  <header class="reference-header">
-    <div>
-      <span class="reference-kicker">Reference</span>
-      <h2>Supporting context</h2>
-    </div>
-    <button
-      type="button"
-      class="reference-add control-motion control-focus control-raise"
-      onclick={onPickReferenceFile}
-      aria-label="Add reference file"
-      title="Add reference file (⌘⇧O)"
-    >
-      ⌘⇧O
-    </button>
+<aside class="reference-pane" aria-label="References">
+  <header>
+    <h2>References</h2>
+    <button type="button" class="btn" onclick={onPickReferenceFile} title="Add a reference file">Add file</button>
   </header>
 
   {#if referenceFiles.length === 0}
-    <div class="reference-empty">
-      <p>Add a reference file with ⌘⇧O.</p>
-      <span>Up to three files stay handy while you review.</span>
-    </div>
+    <p class="empty">Keep up to three files beside the draft while you review.</p>
   {:else}
-    <div class="reference-tabs">
+    <div class="tabs" role="tablist">
       {#each referenceFiles as ref, index}
         <button
           type="button"
-          class="reference-tab control-motion control-focus"
+          role="tab"
+          aria-selected={index === activeReferenceIndex}
+          class="tab"
           class:active={index === activeReferenceIndex}
           onclick={() => onSelectIndex(index)}
           title={ref.path}
@@ -45,122 +33,77 @@
       {/each}
     </div>
 
-    <div class="reference-content">
-      <pre>{referenceFiles[activeReferenceIndex]?.content}</pre>
-    </div>
+    <pre class="content">{referenceFiles[activeReferenceIndex]?.content}</pre>
   {/if}
 </aside>
 
 <style>
   .reference-pane {
-    width: var(--desk-right-width);
-    border-left: 1px solid color-mix(in srgb, var(--paper-edge) 86%, transparent);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--glass-bg-static) 96%, transparent);
+    height: 100%;
+    min-height: 0;
   }
 
-  .reference-header {
-    padding: var(--space-5) var(--space-5) var(--space-4);
-    border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 86%, transparent);
+  header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
+    padding: var(--space-4) var(--space-3) var(--space-2) var(--space-5);
   }
 
-  .reference-kicker {
-    display: inline-flex;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ink-ghost);
-    font-weight: 600;
+  h2 {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--ink-2);
   }
 
-  .reference-header h2 {
-    margin-top: 0.45rem;
-    font-family: var(--font-display);
-    font-size: 1.2rem;
-    color: var(--ink);
-    letter-spacing: -0.01em;
+  .empty {
+    padding: 0 var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--ink-3);
   }
 
-  .reference-add {
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--ink-faded);
-    padding: 0.45rem 0.7rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-ui-small);
-    cursor: pointer;
-  }
-
-  .reference-add:hover {
-    color: var(--ink);
-    border-color: color-mix(in srgb, var(--ink-ghost) 80%, transparent);
-  }
-
-  .reference-empty {
-    padding: var(--space-5);
-  }
-
-  .reference-empty p {
-    font-family: var(--font-body);
-    font-size: var(--text-annotation);
-    color: var(--annotation-ink);
-    font-style: italic;
-  }
-
-  .reference-empty span {
-    display: block;
-    margin-top: 0.45rem;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-  }
-
-  .reference-tabs {
+  .tabs {
     display: flex;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 86%, transparent);
+    gap: 2px;
+    padding: 0 var(--space-3) var(--space-2);
     overflow-x: auto;
   }
 
-  .reference-tab {
-    flex-shrink: 0;
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
-    border-radius: 999px;
+  .tab {
+    height: 28px;
+    padding: 0 var(--space-2);
+    border: none;
+    border-radius: var(--radius-sm);
     background: transparent;
-    color: var(--ink-faded);
-    padding: 0.35rem 0.75rem;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
+    font-size: var(--text-xs);
+    color: var(--ink-2);
+    white-space: nowrap;
     cursor: pointer;
   }
 
-  .reference-tab.active {
-    color: var(--ink);
-    border-color: color-mix(in srgb, var(--accent) 38%, transparent);
-    background: color-mix(in srgb, var(--accent-subtle) 24%, transparent);
+  .tab:hover {
+    background: var(--hover);
   }
 
-  .reference-content {
+  .tab.active {
+    background: var(--press);
+    color: var(--ink);
+  }
+
+  .content {
     flex: 1;
+    min-height: 0;
     overflow: auto;
-    padding: var(--space-4) var(--space-5) var(--space-5);
-  }
-
-  .reference-content pre {
     margin: 0;
-    white-space: pre-wrap;
-    font-family: var(--font-body);
-    font-size: 0.95rem;
-    line-height: 1.65;
+    padding: var(--space-3) var(--space-5) var(--space-8);
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: 1.6;
     color: var(--ink);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

@@ -109,18 +109,7 @@ Operational guarantees:
 
 ## Validation runbook
 
-Run all of these before shipping:
-
-1. `pnpm run check:diff`
-2. `pnpm run check:annotations`
-3. `pnpm run check:targets`
-4. `pnpm run check:render`
-5. `pnpm run check:semantic`
-6. `pnpm run check:bundle`
-7. `pnpm run check:hook`
-8. `pnpm run check:lint`
-9. `pnpm run check`
-10. `pnpm run build`
+Run `pnpm run verify` before shipping. It runs every `check:*` regression script, `svelte-check` and the production build, and stops at the first failure.
 
 ## Known hard problems
 

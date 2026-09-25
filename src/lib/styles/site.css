@@ -6,7 +6,7 @@
   --site-max: 70rem;
   --site-gutter: clamp(1rem, 4vw, 2.5rem);
   --site-radius: 16px;
-  --site-border: 1px solid color-mix(in srgb, var(--paper-edge) 72%, transparent);
+  --site-border: 1px solid color-mix(in srgb, var(--rule-2) 72%, transparent);
   --site-shadow: 0 16px 44px rgba(44, 40, 37, 0.12);
   --site-shadow-soft: 0 10px 28px rgba(44, 40, 37, 0.08);
 }
@@ -19,7 +19,7 @@
   background:
     radial-gradient(1200px 600px at 18% 0%, rgba(193, 127, 36, 0.14), transparent 60%),
     radial-gradient(900px 520px at 82% 10%, rgba(45, 95, 82, 0.12), transparent 55%),
-    linear-gradient(180deg, var(--paper-bright), var(--paper));
+    linear-gradient(180deg, var(--canvas), var(--canvas));
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -56,12 +56,12 @@
 }
 
 :root[data-marginalia-mode='site'] :not(pre) > code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.92em;
   padding: 0.12rem 0.33rem;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper-bright) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 62%, transparent);
   color: color-mix(in srgb, var(--ink) 86%, transparent);
 }
 
@@ -83,7 +83,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule-2) 55%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .site-nav-inner {
@@ -106,7 +106,7 @@
   border-radius: 10px;
   background:
     radial-gradient(10px 10px at 30% 30%, rgba(255, 255, 255, 0.65), transparent 60%),
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white 14%), color-mix(in srgb, var(--added-text) 70%, var(--ink) 30%));
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white 14%), color-mix(in srgb, var(--insert-ink) 70%, var(--ink) 30%));
   box-shadow: var(--site-shadow-soft);
 }
 
@@ -135,12 +135,12 @@
 
 :root[data-marginalia-mode='site'] .nav-links a:hover {
   color: var(--ink);
-  background: color-mix(in srgb, var(--paper-bright) 55%, transparent);
+  background: color-mix(in srgb, var(--canvas) 55%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .nav-links a:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--accent);
 }
 
 :root[data-marginalia-mode='site'] .site-main {
@@ -166,7 +166,7 @@
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 60%, transparent);
+  background: color-mix(in srgb, var(--canvas) 60%, transparent);
   font-size: 0.85rem;
   color: color-mix(in srgb, var(--ink) 70%, transparent);
 }
@@ -230,7 +230,7 @@
 
 :root[data-marginalia-mode='site'] .btn:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--accent);
 }
 
 :root[data-marginalia-mode='site'] .btn-primary {
@@ -241,12 +241,12 @@
 }
 
 :root[data-marginalia-mode='site'] .btn-primary:hover {
-  background: color-mix(in srgb, var(--accent-hover) 88%, white 12%);
+  background: color-mix(in srgb, var(--accent) 88%, white 12%);
 }
 
 :root[data-marginalia-mode='site'] .btn-secondary {
-  background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
-  border-color: color-mix(in srgb, var(--paper-edge) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 70%, transparent);
+  border-color: color-mix(in srgb, var(--rule-2) 70%, transparent);
   color: var(--ink);
 }
 
@@ -257,7 +257,7 @@
 }
 
 :root[data-marginalia-mode='site'] .btn-ghost:hover {
-  background: color-mix(in srgb, var(--paper-bright) 55%, transparent);
+  background: color-mix(in srgb, var(--canvas) 55%, transparent);
   color: var(--ink);
 }
 
@@ -270,7 +270,7 @@
 :root[data-marginalia-mode='site'] .copy-block {
   border-radius: var(--site-radius);
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 72%, transparent);
+  background: color-mix(in srgb, var(--canvas) 72%, transparent);
   box-shadow: var(--site-shadow-soft);
   overflow: hidden;
 }
@@ -281,7 +281,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .copy-label {
@@ -303,8 +303,8 @@
 }
 
 :root[data-marginalia-mode='site'] .copy-btn {
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 60%, transparent);
   color: color-mix(in srgb, var(--ink) 78%, transparent);
   padding: 0.35rem 0.6rem;
   border-radius: 999px;
@@ -320,19 +320,19 @@
 :root[data-marginalia-mode='site'] .copy-btn:hover {
   color: var(--ink);
   transform: translateY(-1px);
-  background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 70%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .copy-btn:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--accent);
 }
 
 :root[data-marginalia-mode='site'] .copy-pre {
   margin: 0;
   padding: 0.85rem;
   overflow: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.9rem;
   line-height: 1.45;
   color: color-mix(in srgb, var(--ink) 86%, transparent);
@@ -341,7 +341,7 @@
 :root[data-marginalia-mode='site'] .hero-visual {
   border-radius: calc(var(--site-radius) + 6px);
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 65%, transparent);
+  background: color-mix(in srgb, var(--canvas) 65%, transparent);
   box-shadow: var(--site-shadow);
   padding: 1.1rem;
   overflow: hidden;
@@ -361,8 +361,8 @@
 
 :root[data-marginalia-mode='site'] .flow-node {
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 62%, transparent);
   padding: 0.85rem 0.85rem;
 }
 
@@ -422,7 +422,7 @@
 :root[data-marginalia-mode='site'] .panel {
   border-radius: calc(var(--site-radius) + 6px);
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 66%, transparent);
+  background: color-mix(in srgb, var(--canvas) 66%, transparent);
   box-shadow: var(--site-shadow-soft);
   padding: 1rem;
 }
@@ -450,8 +450,8 @@
   gap: 0.75rem;
   padding: 0.85rem 0.9rem;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper) 64%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 64%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .step-index {
@@ -495,10 +495,10 @@
   width: 100%;
   padding: 0.7rem 0.8rem;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 62%, transparent);
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.9rem;
   transition:
     transform var(--transition-fast),
@@ -508,24 +508,24 @@
 
 :root[data-marginalia-mode='site'] .bundle-item:hover {
   transform: translateY(-1px);
-  background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 70%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .bundle-item.active {
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--paper-bright) 88%);
+  background: color-mix(in srgb, var(--accent) 12%, var(--canvas) 88%);
 }
 
 :root[data-marginalia-mode='site'] .bundle-detail {
   border-radius: calc(var(--site-radius) + 6px);
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 66%, transparent);
+  background: color-mix(in srgb, var(--canvas) 66%, transparent);
   box-shadow: var(--site-shadow-soft);
   padding: 1rem;
 }
 
 :root[data-marginalia-mode='site'] .bundle-detail h3 {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.98rem;
 }
 
@@ -538,11 +538,11 @@
 :root[data-marginalia-mode='site'] .bundle-preview {
   margin-top: 0.75rem;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
-  background: color-mix(in srgb, var(--paper) 64%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 70%, transparent);
+  background: color-mix(in srgb, var(--canvas) 64%, transparent);
   padding: 0.85rem;
   overflow: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -551,7 +551,7 @@
   margin-top: 1rem;
   border-radius: calc(var(--site-radius) + 6px);
   border: var(--site-border);
-  background: color-mix(in srgb, var(--paper-bright) 66%, transparent);
+  background: color-mix(in srgb, var(--canvas) 66%, transparent);
   box-shadow: var(--site-shadow-soft);
   padding: 0.9rem 1rem;
 }
@@ -564,7 +564,7 @@
 
 :root[data-marginalia-mode='site'] .site-footer {
   padding: 2.5rem 0 3rem;
-  border-top: 1px solid color-mix(in srgb, var(--paper-edge) 55%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--rule-2) 55%, transparent);
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   font-size: 0.9rem;
 }
@@ -586,16 +586,16 @@
 :root[data-marginalia-mode='site'] .footer-links a {
   padding: 0.35rem 0.55rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--paper-bright) 55%, transparent);
-  border: 1px solid color-mix(in srgb, var(--paper-edge) 60%, transparent);
+  background: color-mix(in srgb, var(--canvas) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule-2) 60%, transparent);
 }
 
 :root[data-marginalia-mode='site'] .reveal {
   opacity: 0;
   transform: translateY(10px);
   transition:
-    opacity 520ms var(--motion-ease-standard),
-    transform 520ms var(--motion-ease-standard);
+    opacity 520ms var(--ease),
+    transform 520ms var(--ease);
 }
 
 :root[data-marginalia-mode='site'] .reveal.is-visible {

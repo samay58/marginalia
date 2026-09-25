@@ -1,21 +1,14 @@
 <script>
   import AnnotationEditor from './AnnotationEditor.svelte';
-  import BeveledButton from './chrome/BeveledButton.svelte';
-  import SunkenWell from './chrome/SunkenWell.svelte';
 
   /** @typedef {import('../utils/diff.js').Change} Change */
 
-  /** @type {{ minimized?: boolean, maximized?: boolean, onMinimize?: () => void, onMaximize?: () => void, onClose?: () => void, selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], densityMode?: 'review' | 'manuscript', isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
+  /** @type {{ onClose?: () => void, selectedChange?: Change | null, selectedAnnotationEntry?: any, annotationEntries?: any[], isComposing?: boolean, composerDraft?: string, onSelectChange?: (change: Change) => void, onSelectAnnotation?: (annotationId: string) => void, onStartCompose?: () => void, onDraftInput?: (value: string) => void, onSaveCompose?: () => void, onCancelCompose?: () => void, onRemoveSelected?: () => void, onReattachSelected?: () => void }} */
   let {
-    minimized = false,
-    maximized = false,
-    onMinimize = () => {},
-    onMaximize = () => {},
     onClose = () => {},
     selectedChange = null,
     selectedAnnotationEntry = null,
     annotationEntries = [],
-    densityMode = 'manuscript',
     isComposing = false,
     composerDraft = '',
     onSelectChange = () => {},
@@ -34,147 +27,88 @@
   export function focusComposer() {
     editorRef?.focusEditor?.();
   }
-
-  const stripes = [0, 1, 2, 3, 4];
 </script>
 
-<aside class="rationale-panel" class:density-review={densityMode === 'review'} class:minimized class:maximized>
-  <div class="rat-titlebar">
-    <span class="rat-title">Rationale</span>
-    <div class="rat-stripes">
-      {#each stripes as _, i}<span class:dark={i % 2 === 1}></span>{/each}
-    </div>
-    <div class="rat-ctls">
-      <button class="rat-ctl" aria-label="Minimize" onclick={onMinimize}><span class="rat-bar"></span></button>
-      <button class="rat-ctl" aria-label="Maximize" onclick={onMaximize}><span class="rat-box"></span></button>
-      <button class="rat-ctl rat-x" aria-label="Close" onclick={onClose}>✕</button>
-    </div>
-  </div>
+<aside class="rationale-panel" aria-label="Rationale">
+  <header class="panel-head">
+    <h2>Rationale</h2>
+    <button type="button" class="btn icon-btn" aria-label="Hide rationale panel" title="Hide (⌘⇧R)" onclick={onClose}>
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7m0-7l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+    </button>
+  </header>
 
-  <div class="rat-toolbar">
-    <BeveledButton onClick={onStartCompose}>+ New note</BeveledButton>
-  </div>
-
-  <div class="rat-body">
-    <SunkenWell pad="14px 12px">
-      {#if !isComposing && !selectedChange && !selectedAnnotationEntry && annotationEntries.length === 0}
-        <p class="rat-empty">No rationales yet.</p>
-      {:else}
-      <div class="rat-feature">
-        {#if isComposing}
-          <AnnotationEditor
-            bind:this={editorRef}
-            excerpt={selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || ''}
-            value={composerDraft}
-            autofocus={true}
-            canRemove={!!selectedAnnotationEntry}
-            saveLabel={selectedAnnotationEntry ? 'Update rationale' : 'Save rationale'}
-            onInput={onDraftInput}
-            onSave={onSaveCompose}
-            onCancel={onCancelCompose}
-            onRemove={onRemoveSelected}
-          />
-        {:else if selectedAnnotationEntry?.status === 'stale'}
-          <div class="stale-card">
-            <span class="stale-badge">Stale note</span>
-            <p class="rationale-text">{selectedAnnotationEntry.annotation.rationale}</p>
-          </div>
-
-          <div class="annotation-actions-row">
-            {#if selectedChange}
-              <button
-                type="button"
-                class="annotation-primary"
-                onclick={onReattachSelected}
-              >
-                Attach to selected edit
-              </button>
-            {/if}
-            <button
-              type="button"
-              class="annotation-secondary"
-              onclick={onStartCompose}
-            >
-              Edit note
-            </button>
-            <button
-              type="button"
-              class="annotation-secondary destructive"
-              onclick={onRemoveSelected}
-            >
-              Dismiss
-            </button>
-          </div>
-        {:else if selectedChange}
-          <p class="excerpt-text">"{selectedChange.text}"</p>
-          {#if selectedAnnotationEntry}
-            <p class="rationale-text">{selectedAnnotationEntry.annotation.rationale}</p>
+  <div class="panel-body">
+    <section class="focus">
+      {#if isComposing}
+        <AnnotationEditor
+          bind:this={editorRef}
+          excerpt={selectedChange?.text || selectedAnnotationEntry?.annotation.target.excerpt || ''}
+          value={composerDraft}
+          autofocus={true}
+          canRemove={!!selectedAnnotationEntry}
+          saveLabel={selectedAnnotationEntry ? 'Update' : 'Save'}
+          onInput={onDraftInput}
+          onSave={onSaveCompose}
+          onCancel={onCancelCompose}
+          onRemove={onRemoveSelected}
+        />
+      {:else if selectedAnnotationEntry?.status === 'stale'}
+        <p class="meta">Stale. The edit this explained has changed.</p>
+        <p class="rationale">{selectedAnnotationEntry.annotation.rationale}</p>
+        <div class="actions">
+          {#if selectedChange}
+            <button type="button" class="btn btn-primary" onclick={onReattachSelected}>Attach to selected edit</button>
           {/if}
-
-          <div class="annotation-actions-row">
-            <button
-              type="button"
-              class="annotation-primary"
-              onclick={onStartCompose}
-            >
-              {selectedAnnotationEntry ? 'Edit rationale' : 'Add rationale'}
-            </button>
-            {#if selectedAnnotationEntry}
-              <button
-                type="button"
-                class="annotation-secondary destructive"
-                onclick={onRemoveSelected}
-              >
-                Remove
-              </button>
-            {/if}
-          </div>
-        {:else}
-          <p class="rat-empty">Select an edit to review it.</p>
+          <button type="button" class="btn" onclick={onStartCompose}>Edit</button>
+          <button type="button" class="btn btn-danger" onclick={onRemoveSelected}>Dismiss</button>
+        </div>
+      {:else if selectedChange}
+        <p class="excerpt" class:deleted={selectedChange.type === 'deletion'}>“{selectedChange.text.trim()}”</p>
+        {#if selectedAnnotationEntry}
+          <p class="rationale">{selectedAnnotationEntry.annotation.rationale}</p>
         {/if}
-      </div>
+        <div class="actions">
+          {#if selectedAnnotationEntry}
+            <button type="button" class="btn" onclick={onStartCompose}>Edit</button>
+            <button type="button" class="btn btn-danger" onclick={onRemoveSelected}>Remove</button>
+          {:else}
+            <button type="button" class="btn btn-primary" onclick={onStartCompose}>
+              Add rationale <kbd>⌘/</kbd>
+            </button>
+          {/if}
+        </div>
+      {:else}
+        <p class="meta">Select an edit, in the text or the list, to explain it.</p>
+      {/if}
+    </section>
 
-      <div class="rat-section">
-        <div class="section-heading">Saved notes</div>
-        {#if annotationEntries.length === 0}
-          <p class="rat-empty">No rationales yet.</p>
-        {:else}
-          <div class="note-stack">
-            {#each annotationEntries as entry}
+    {#if annotationEntries.length > 0}
+      <section class="saved">
+        <h3>Saved <span class="count">{annotationEntries.length}</span></h3>
+        <ol>
+          {#each annotationEntries as entry (entry.annotation.id)}
+            <li>
               <button
                 type="button"
-                class="note-card"
+                class="saved-item"
                 class:selected={selectedAnnotationEntry?.annotation.id === entry.annotation.id}
-                class:stale={entry.status === 'stale'}
                 onclick={() =>
                   entry.status === 'active' && entry.change
                     ? onSelectChange(entry.change)
                     : onSelectAnnotation(entry.annotation.id)}
               >
-                <div class="note-card-top">
-                  <span class="note-label">
-                    {entry.status === 'active' ? `Note ${entry.displayIndex}` : 'Stale'}
-                  </span>
-                  <span class="note-line">
-                    {#if entry.status === 'active' && entry.change}
-                      L{entry.change.location.line}
-                    {/if}
-                  </span>
-                </div>
-                <p>{entry.annotation.rationale}</p>
+                <span class="saved-meta">
+                  {entry.status === 'active'
+                    ? [entry.displayIndex, entry.change && `Line ${entry.change.location.line}`].filter(Boolean).join(' · ')
+                    : 'Stale'}
+                </span>
+                <span class="saved-text">{entry.annotation.rationale}</span>
               </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-      {/if}
-    </SunkenWell>
-  </div>
-
-  <div class="rat-grip" aria-hidden="true">
-    <span></span><span></span><span></span>
-    <span class="off"></span><span></span><span></span>
-    <span class="off"></span><span class="off"></span><span></span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
   </div>
 </aside>
 
@@ -184,255 +118,141 @@
     flex-direction: column;
     width: var(--rationale-w);
     flex-shrink: 0;
-    background: var(--window-body);
-    border-left: 1px solid var(--navy-shadow);
-    box-shadow: inset 1px 0 0 var(--chrome-highlight);
-    position: relative;
-    overflow: hidden;
-  }
-  .rationale-panel.minimized {
-    height: 34px;
-    align-self: flex-start;
-  }
-  .rationale-panel.maximized {
-    flex: 1;
-    width: auto;
-  }
-  .rationale-panel.minimized .rat-toolbar,
-  .rationale-panel.minimized .rat-body,
-  .rationale-panel.minimized .rat-grip {
-    display: none;
-  }
-  .rat-titlebar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 34px;
-    background: var(--navy-chrome);
-    padding: 0 6px;
-    border-bottom: 2px solid var(--navy-shadow);
-    flex-shrink: 0;
-  }
-  .rat-title {
-    font-family: var(--font-chrome);
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--chrome-highlight);
-    padding: 0 6px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .rat-stripes {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 2px;
-    padding: 8px 0;
-  }
-  .rat-stripes span {
-    height: 1px;
-    background: var(--chrome-highlight);
-  }
-  .rat-stripes span.dark {
-    background: var(--navy-shadow);
-  }
-  .rat-ctls {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-shrink: 0;
-  }
-  .rat-ctl {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    background: var(--button-face);
-    border: 1px solid var(--navy-shadow);
-    box-shadow: var(--bevel-raised-1);
-    padding: 0;
-    cursor: pointer;
-  }
-  .rat-bar { width: 10px; height: 2px; background: var(--ink); margin-top: 8px; }
-  .rat-box { width: 11px; height: 9px; background: transparent; border: 2px solid var(--ink); }
-  .rat-x { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--ink); }
-
-  .rat-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    height: 42px;
-    padding: 0 6px;
-    align-items: center;
-    background: var(--window-body);
-    border-bottom: 1px solid var(--chrome-shadow);
-    box-shadow: inset 0 -2px 0 var(--chrome-highlight);
-    flex-shrink: 0;
+    min-height: 0;
+    border-left: 1px solid var(--rule);
+    background: var(--canvas);
   }
 
-  .rat-body {
-    flex: 1;
-    padding: 10px;
-    overflow: auto;
-  }
-
-  .rat-feature {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .rat-section {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .rat-empty {
-    font-family: var(--font-wordmark);
-    font-style: italic;
-    font-size: 16px;
-    color: var(--chrome-shadow);
-    margin: 0;
-  }
-
-  .section-heading,
-  .note-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-family: var(--font-chrome);
-    font-size: 11px;
-    line-height: 1.2;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    font-weight: 700;
-  }
-
-  .note-line {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  .excerpt-text {
-    font-family: var(--font-body);
-    font-size: 15px;
-    line-height: 1.5;
-    color: var(--ink);
-    font-style: italic;
-    margin: 0;
-  }
-
-  .rationale-text,
-  .note-card p {
-    font-family: var(--font-body);
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--ink);
-    margin: 0;
-  }
-
-  .stale-card {
-    border: 1px solid var(--chip-red-border);
-    background: var(--chip-red-bg);
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .stale-badge {
-    font-family: var(--font-chrome);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--chip-red-text);
-    font-weight: 700;
-  }
-
-  .note-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .annotation-actions-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .annotation-primary,
-  .annotation-secondary {
-    padding: 5px 10px;
-    font-family: var(--font-chrome);
-    font-size: 12px;
-    font-weight: 700;
-    border: 1px solid var(--navy-shadow);
-    box-shadow: var(--bevel-raised-1);
-    background: var(--button-face);
-    color: var(--ink);
-    cursor: pointer;
-  }
-  .annotation-primary:active,
-  .annotation-secondary:active {
-    box-shadow: var(--bevel-sunken-1);
-  }
-  .annotation-primary {
-    background: var(--navy-chrome);
-    color: var(--chrome-highlight);
-  }
-  .annotation-secondary.destructive {
-    color: var(--chip-red-text);
-  }
-
-  .note-card {
-    width: 100%;
-    text-align: left;
-    padding: 8px 10px;
-    border: 1px solid var(--chrome-shadow);
-    background: var(--window-body);
-    box-shadow: var(--bevel-raised-1);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .note-card:hover {
-    background: var(--chrome-highlight);
-  }
-  .note-card.selected {
-    box-shadow: var(--bevel-sunken-1);
-    background: var(--chrome-highlight);
-  }
-  .note-card.stale {
-    border-color: var(--chip-red-border);
-    background: var(--chip-red-bg);
-  }
-  .note-card-top {
+  .panel-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    padding: var(--space-4) var(--space-3) var(--space-2) var(--space-5);
   }
 
-  .rat-grip {
-    position: absolute;
-    right: 3px;
-    bottom: 3px;
-    display: grid;
-    grid-template-columns: repeat(3, 2px);
+  h2 {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  .panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 var(--space-5) var(--space-8);
+  }
+
+  .focus {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-2);
+  }
+
+  .excerpt {
+    font-size: var(--text-md);
+    color: var(--insert-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .excerpt.deleted {
+    color: var(--delete-ink);
+    text-decoration: line-through;
+    text-decoration-color: var(--delete-line);
+  }
+
+  .rationale {
+    font-size: var(--text-md);
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .meta {
+    font-size: var(--text-sm);
+    color: var(--ink-3);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-left: calc(-1 * var(--space-3));
+  }
+
+  .actions .btn-primary {
+    margin-left: var(--space-3);
+  }
+
+  .btn-primary kbd {
+    color: inherit;
+    opacity: 0.7;
+  }
+
+  .saved {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--ink-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .count {
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    margin-left: var(--space-1);
+  }
+
+  ol {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0 calc(-1 * var(--space-2));
+  }
+
+  .saved-item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
     gap: 2px;
-    pointer-events: none;
+    padding: var(--space-2);
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
   }
-  .rat-grip span {
-    width: 2px;
-    height: 2px;
-    background: var(--ink);
+
+  .saved-item:hover {
+    background: var(--hover);
   }
-  .rat-grip span.off { background: transparent; }
+
+  .saved-item.selected {
+    background: var(--selected-bg);
+  }
+
+  .saved-meta {
+    font-size: var(--text-xs);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .saved-text {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 </style>

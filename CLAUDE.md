@@ -26,19 +26,10 @@ pnpm tauri:build:app  # build .app bundle
 pnpm tauri:build:dmg  # build DMG release artifact
 ```
 
-Validation (run all before shipping):
+Validation (run before shipping):
 
 ```bash
-pnpm run check:diff         # diff ID retention
-pnpm run check:annotations  # annotation model invariants
-pnpm run check:targets      # durable review target invariants
-pnpm run check:render       # pending/stale diff render decisions
-pnpm run check:semantic     # semantic diff correctness
-pnpm run check:bundle       # bundle artifact completeness
-pnpm run check:hook         # hook async queue behavior
-pnpm run check:lint         # lint model checks
-pnpm run check              # Svelte type checking (svelte-check)
-pnpm run build              # production frontend build
+pnpm run verify   # every check:* script, svelte-check, then the production build
 ```
 
 Each `check:*` script is a standalone regression test in `scripts/`. `pnpm run check` is Svelte type checking, not a test runner.
@@ -49,10 +40,9 @@ Each `check:*` script is a standalone regression test in `scripts/`. `pnpm run c
 - **Desktop shell**: Tauri 2 (Rust). The Rust layer is intentionally thin: file I/O, bundle persistence, CLI arg parsing, window lifecycle. All review logic lives in the frontend.
 - **Editor**: Milkdown (ProseMirror-based markdown editor)
 - **Diffing**: `diff-match-patch` on rendered plain text, not raw markdown
-- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`, gated behind a Preferences toggle + `VITE_DIALKIT=1` (hidden by default)
-- **Animations**: `motion` (Framer Motion for JS)
-- **Theme**: v2 clunky old-school chrome. Tokens in `src/lib/theme/tokens.css`, bevel + utility classes in `src/lib/theme/chrome.css`. Full spec in `docs/design/DESIGN_REFERENCE.md`.
-- **Fonts**: EB Garamond (wordmark + italic empty states), Old Standard TT (manuscript headings), IM Fell English (manuscript body), IBM Plex Sans (chrome UI), IBM Plex Mono (keycaps + counters). Bundled locally via `@fontsource/*` imports in `src/routes/+layout.svelte`, so the app renders the same offline.
+- **Theme**: quiet monochrome. Tokens live in `src/lib/theme/tokens.css` (alpha-black ink ladder, hairlines, one lilac accent used for the primary action and insertions, light and dark via `prefers-color-scheme`). Shared `.btn`, `.field` and `kbd` styles live in `src/app.css`. No bevels, no serif display, no mono UI text.
+- **Fonts**: IBM Plex Sans only, bundled via `@fontsource/ibm-plex-sans` in `src/routes/+layout.svelte`, so the app makes no network requests.
+- **Window**: native macOS traffic lights over an overlay title bar (`titleBarStyle: Overlay`, `trafficLightPosition` in `tauri.conf.json`). `TopBar` is the drag region.
 
 ## Architecture
 
@@ -68,7 +58,7 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 ### Core data flow
 
 1. Rust reads the markdown file and exposes it via Tauri commands.
-2. The frontend stores the canonical review session in `src/lib/stores/review-session.js`; `src/lib/stores/app.js` is only a compatibility facade.
+2. The frontend stores the canonical review session in `src/lib/stores/review-session.js`.
 3. Typing updates `editedPlainText` immediately, increments `documentEpoch`, and marks the diff pending. Expensive derived stores read from `debouncedEditedPlainText`, which lags by ~120ms to batch keystrokes.
 4. Diffing runs on the plain-text projections (what the user actually sees), not raw markdown.
 5. Review targets are the identity layer. Diffs and change groups are views over document snapshots.
@@ -79,9 +69,6 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 
 - `src/routes/review/+page.svelte`: app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
 - `src/lib/stores/review-session.js`: document state, epochs, target state, rationale drafts, debounced diff chain, trivial/substantive change split
-- `src/lib/stores/app.js`: compatibility facade for existing imports
-- `src/lib/stores/review-ui.js`: ephemeral tab mode and rationale panel state (open, minimized, maximized, closed)
-- `src/lib/stores/preferences.js`: persisted preferences (localStorage); currently gates the DialKit tuning handle
 - `src/lib/utils/diff.js`: stable text diff with ID retention across edits
 - `src/lib/utils/review-targets.js`: durable review targets, change groups, target resolution, rationale drafts
 - `src/lib/utils/annotations.js`: annotation records, target metadata, reattachment scoring, stale resolution
@@ -89,10 +76,11 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 - `src/lib/utils/bundle.js`: bundle generation (format `3.1`)
 - `src/lib/components/Editor.svelte`: Milkdown host, persistent note markers from resolved annotations
 - `src/lib/components/ChangeRail.svelte`: left-side change index over change groups. Substantive groups shown with type icons; trivial edits collapsed at the bottom.
-- `src/lib/components/AnnotationColumn.svelte`: desktop rationale workflow, framed as a beveled sub-window (min/max/close, sunken body well). Flex sibling, not an overlay.
+- `src/lib/components/AnnotationColumn.svelte`: desktop rationale panel. Flex sibling of the manuscript; ⌘⇧R hides it.
 - `src/lib/components/AnnotationEditor.svelte`: rationale compose UI (excerpt preview, textarea, Remove / Cancel / Save)
 - `src/lib/components/AnnotationPopover.svelte`: compact-layout rationale UI
-- `src/lib/components/chrome/`: v2 chrome primitives (`WindowFrame`, `TitleBar`, `TrafficLight`, `AppHeader`, `TabStrip`, `BottomShortcutBar`, `Keycap`, `BeveledButton`, `StatusLED`, `SunkenWell`, `HelpModal`, `PreferencesPanel`)
+- `src/lib/components/shell/`: `TopBar` (file name, Review/Focus switch, help, Done), `StatusBar` (counts, save state, clickable shortcut hints), `HelpSheet`
+- `src/lib/review/keymap.js`: the one shortcut table the help sheet and status bar read. Bindings live in `handleKeydown` in the review page.
 - `src-tauri/src/lib.rs`: native file/bundle I/O, CLI parsing, window commands
 - `src-tauri/.cargo/config.toml`: forces Apple's `/usr/bin/cc` as the Rust linker, bypassing the Playbit toolchain's `ld64.lld`, which can't resolve the macOS SDK
 
@@ -121,13 +109,16 @@ Both tiers are still visible in the editor inline and included in the bundle out
 
 ## Removed features
 
-Slop/lint matching (tone violations, WRITING.md ban patterns, the `linesWithSlop` store, `slopMatchers`, `SessionDrawer` lint column, `milkdown-slop-plugin`) was removed. The `writingRuleMatcher` for auto-tagging annotations with matched rules is kept.
+Slop/lint matching (tone violations, WRITING.md ban patterns, `lint.js`, `tone-lint.js`, `milkdown-slop-plugin`, the summary's "Tone & Slop Flags" section) was removed. The `writingRuleMatcher` for auto-tagging annotations with matched rules is kept.
+
+The v2 "clunky" retro chrome (navy title bars, bevels, keycaps, serif manuscript) and DialKit layout tuning were removed in favour of the quiet monochrome theme.
 
 ## Important behavior contracts
 
 - Diffs are computed from rendered plain text, not raw markdown.
 - Whitespace-only changes are filtered from the visible review surface.
-- Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets and `⌥-click` on insertions are click-intercepted; bare clicks on insertions place the cursor normally. The rail is the primary selection path for insertions; `⌥-click` is the discoverability affordance.
+- Clicking inserted text selects that change and still places the caret, so inserted text stays editable. Only deletion widgets intercept the click.
+- Escape closes the topmost layer (help, popover, references, composer, session notes). With nothing open it finishes the review.
 - Selecting an edit must not focus or reopen the rationale composer.
 - Saved manuscript markers are keyed by stable annotation IDs and grouped by block, not mutable geometry buckets.
 

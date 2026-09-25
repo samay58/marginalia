@@ -118,30 +118,22 @@ Current schema markers:
 
 | Key | Action |
 | --- | --- |
-| `Esc` | Finalize review and write bundle |
-| `⌘ Enter` | Finalize review |
-| `⌘ /` | Start a rationale for the nearest edit |
-| `⌘ G` | Toggle session notes |
+| Click an edit | Select it, in the text or the change list |
+| `⌘ /` | Explain the selected edit, or the one nearest the cursor |
+| `⌘ ⇧ R` | Show or hide the rationale panel |
+| `⌘ G` | Session notes for the whole draft |
+| `⌘ ⇧ O` | References |
 | `⌘ O` | Open a different draft |
-| `⌘ ⇧ O` | Toggle references |
-| `⌘ Z` | Undo |
-| `⌘ ⇧ Z` | Redo |
+| `⌘ Z` / `⌘ ⇧ Z` | Undo / redo |
+| `Esc` | Close the open panel; with nothing open, finish the review |
+| `⌘ Enter` | Finish the review and write the bundle |
 
 ## Development
 
 ```bash
 pnpm install
 pnpm tauri dev
-pnpm run check:diff
-pnpm run check:annotations
-pnpm run check:targets
-pnpm run check:render
-pnpm run check:semantic
-pnpm run check:bundle
-pnpm run check:hook
-pnpm run check:lint
-pnpm run check
-pnpm run build
+pnpm run verify
 ```
 
 Notes:

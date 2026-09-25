@@ -6,19 +6,19 @@
   import * as milkdownUtils from '@milkdown/utils';
   import { createDiffPlugin, triggerDiffUpdate } from '../utils/milkdown-diff-plugin.js';
   import { historyKeymapPlugin, historyPlugin } from '../utils/milkdown-history-plugin.js';
+  import { undo as undoCommand } from '@milkdown/prose/history';
   import { buildTextMap } from '../utils/prosemirror-text.js';
   import { summarizeText } from '../utils/text.js';
 
   /** @typedef {{ annotationId: string, changeId: string, displayIndex: number, top: number, selected: boolean, preview: string }} AnchorMark */
 
-  /** @type {{ initialContent?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, selectedChangeId?: string | null, densityMode?: 'review' | 'manuscript', onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, onRuntimeError?: (code: string, detail: string) => void }} */
+  /** @type {{ initialContent?: string, diffResult?: any, annotationEntries?: any[], selectedAnnotationId?: string | null, selectedChangeId?: string | null, onChange?: (content: string) => void, onPlainTextChange?: (text: string) => void, onInitialRender?: (text: string) => void, onLineChange?: (lineNumber: number) => void, getDiffResult?: () => any, onClickChange?: (changeId: string, text: string, x: number, y: number) => void, onSelectAnchor?: (annotationId: string, x: number, y: number) => void, onScroll?: (scrollTop: number) => void, onRuntimeError?: (code: string, detail: string) => void }} */
   let {
     initialContent = '',
     diffResult = null,
     annotationEntries = [],
     selectedAnnotationId = null,
     selectedChangeId = null,
-    densityMode = 'manuscript',
     onChange = () => {},
     onPlainTextChange = () => {},
     onInitialRender = () => {},
@@ -345,10 +345,9 @@
     }
   });
 
-  // Update decorations for low-frequency UI events (selection, density)
+  // Refresh decorations when the selected change moves.
   $effect(() => {
     selectedChangeId;
-    densityMode;
     if (isReady) {
       try {
         if (editor) {
@@ -382,6 +381,13 @@
   export function focus() {
     const view = getEditorView();
     view?.focus();
+  }
+
+  export function undo() {
+    const view = getEditorView();
+    if (!view) return;
+    undoCommand(view.state, view.dispatch);
+    view.focus();
   }
 
   export function refreshDiff() {
@@ -467,9 +473,7 @@
 </script>
 
 <div
-  class="editor-shell manuscript-host v2-manuscript"
-  class:density-review={densityMode === 'review'}
-  class:density-manuscript={densityMode === 'manuscript'}
+  class="manuscript-host"
   bind:this={editorShell}
   onscroll={handleScroll}
 >
@@ -482,12 +486,11 @@
         >
           <button
             type="button"
-            class="anchor-hit control-motion control-focus"
+            class="anchor-hit"
             class:selected={mark.selected}
             onclick={(event) => handleAnchorClick(mark, event)}
             aria-label={`Jump to note ${mark.displayIndex}`}
           >
-            <span class="anchor-line"></span>
             <span class="anchor-badge">{mark.displayIndex}</span>
           </button>
         </div>
@@ -501,63 +504,20 @@
 </div>
 
 <style>
-  .editor-shell {
-    flex: 1;
-    overflow: auto;
-    padding-bottom: var(--space-12);
-  }
-
   .manuscript-host {
     flex: 1;
     width: 100%;
     min-width: 0;
-    background: var(--paper);
-    border-left: 1px solid var(--chrome-shadow);
-    box-shadow: inset 1px 0 0 var(--chrome-highlight);
-    padding: 40px 48px 60px 48px;
+    background: var(--canvas);
+    padding: var(--space-12) var(--space-12) 96px;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
-  :global(.manuscript-host .milkdown),
-  :global(.manuscript-host .ProseMirror) {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-  :global(.v2-manuscript .ProseMirror) {
-    font-family: var(--font-body);
-    font-size: 18px;
-    line-height: 28px;
-    color: var(--ink);
-  }
-  :global(.v2-manuscript .ProseMirror h1) {
-    font-family: var(--font-h);
-    font-size: 38px;
-    line-height: 46px;
-    font-weight: 700;
-    margin-bottom: 24px;
-  }
-  :global(.v2-manuscript .ProseMirror h2) {
-    font-family: var(--font-h);
-    font-size: 22px;
-    line-height: 28px;
-    font-weight: 700;
-    margin: 28px 0 14px 0;
-  }
-  :global(.v2-manuscript .ProseMirror p) {
-    margin-bottom: 28px;
-  }
-
   .editor-frame {
     position: relative;
+    max-width: calc(var(--measure) + var(--gutter-width));
     margin: 0 auto;
-    padding-top: var(--space-12);
-    padding-bottom: var(--space-12);
-  }
-
-  .editor-shell.density-review .editor-frame {
-    padding-top: var(--space-9);
   }
 
   .editor-surface {
@@ -581,154 +541,135 @@
     position: absolute;
     left: 0;
     right: 0;
-    height: 1.45rem;
+    height: 1.5rem;
     overflow: visible;
   }
 
   .anchor-hit {
     position: absolute;
-    right: 0.45rem;
-    top: 0;
-    width: 2.3rem;
-    min-width: 2.3rem;
-    height: 1.45rem;
+    right: var(--space-3);
+    top: 0.2rem;
+    height: 1.25rem;
+    padding: 0;
     border: none;
     background: transparent;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    justify-content: flex-end;
     pointer-events: auto;
     overflow: visible;
+    border-radius: var(--radius-sm);
   }
 
-  .anchor-line {
-    position: absolute;
-    right: 0.12rem;
-    top: 0.12rem;
-    width: 3px;
-    height: 1.15rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 78%, transparent);
-  }
-
-  .anchor-hit.selected .anchor-line {
-    width: 4px;
+  .anchor-hit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .anchor-badge {
-    position: relative;
-    right: 0.38rem;
-    min-width: max(1.35rem, 2ch);
-    height: 1.35rem;
-    border-radius: 999px;
-    padding: 0 0.34rem;
+    min-width: max(1.25rem, 2ch);
+    height: 1.25rem;
+    padding: 0 0.3rem;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--accent) 88%, var(--paper-bright));
-    color: var(--paper-bright);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1;
     white-space: nowrap;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
   }
 
-  .editor-root :global(.milkdown) {
-    font-family: var(--font-body);
-    color: var(--ink);
+  .anchor-hit:hover .anchor-badge,
+  .anchor-hit.selected .anchor-badge {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .editor-root :global(.milkdown),
+  .editor-root :global(.milkdown .ProseMirror) {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    font-family: var(--font-sans);
+    font-size: var(--text-manuscript);
     line-height: var(--line-height);
+    color: var(--ink);
     outline: none;
   }
 
-  .editor-root :global(.milkdown .editor),
-  .editor-root :global(.milkdown .ProseMirror),
   .editor-root :global(.milkdown .ProseMirror:focus) {
     outline: none;
   }
 
-  .editor-root :global(.milkdown .ProseMirror) {
-    min-height: 100%;
-  }
-
   .editor-root :global(.milkdown h1) {
-    font-family: var(--font-display);
-    font-size: var(--text-title);
+    font-size: 30px;
     font-weight: 600;
-    color: var(--ink);
-    margin: 0 0 var(--space-2);
-    line-height: 1.25;
+    line-height: 1.15;
     letter-spacing: -0.02em;
+    margin: 0 0 var(--space-6);
   }
 
   .editor-root :global(.milkdown h2) {
-    font-family: var(--font-display);
-    font-size: var(--text-heading);
+    font-size: 22px;
     font-weight: 600;
-    color: var(--ink);
-    margin: var(--space-8) 0 var(--space-3);
-    line-height: 1.35;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    margin: var(--space-10) 0 var(--space-3);
   }
 
   .editor-root :global(.milkdown h3) {
-    font-family: var(--font-display);
-    font-size: 1.125rem;
+    font-size: 18px;
     font-weight: 600;
-    color: var(--ink);
-    margin: var(--space-6) 0 var(--space-2);
+    line-height: 1.3;
+    margin: var(--space-8) 0 var(--space-2);
   }
 
   .editor-root :global(.milkdown p) {
-    margin: var(--space-5) 0;
-    line-height: var(--line-height);
-    font-size: 1.125rem;
-  }
-
-  .editor-shell.density-review .editor-root :global(.milkdown p) {
-    margin: var(--space-4) 0;
-    font-size: 1.0625rem;
+    margin: 0 0 1em;
   }
 
   .editor-root :global(.milkdown ul),
   .editor-root :global(.milkdown ol) {
-    margin: var(--space-5) 0;
-    padding-left: var(--space-7);
+    margin: 0 0 1em;
+    padding-left: 1.5em;
   }
 
   .editor-root :global(.milkdown li) {
-    margin: var(--space-2) 0;
+    margin: var(--space-1) 0;
   }
 
-  .editor-root :global(.milkdown ul li::marker) {
-    color: var(--ink-faded);
+  .editor-root :global(.milkdown li p) {
+    margin: 0;
+  }
+
+  .editor-root :global(.milkdown li::marker) {
+    color: var(--ink-3);
   }
 
   .editor-root :global(.milkdown strong) {
     font-weight: 600;
-    color: var(--ink);
-  }
-
-  .editor-root :global(.milkdown em) {
-    font-style: italic;
   }
 
   .editor-root :global(.milkdown code) {
-    font-family: var(--font-mono);
-    font-size: 0.875em;
-    background: color-mix(in srgb, var(--paper-matte) 95%, transparent);
-    padding: 0.125rem 0.375rem;
+    font-family: var(--font-code);
+    font-size: 0.88em;
+    background: var(--hover);
+    padding: 0.1em 0.3em;
     border-radius: 4px;
-    color: var(--ink);
   }
 
   .editor-root :global(.milkdown pre) {
-    background: color-mix(in srgb, var(--paper-matte) 96%, transparent);
+    background: var(--hover);
     padding: var(--space-4);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
     overflow-x: auto;
-    margin: var(--space-6) 0;
+    margin: 0 0 1em;
   }
 
   .editor-root :global(.milkdown pre code) {
@@ -737,57 +678,41 @@
   }
 
   .editor-root :global(.milkdown blockquote) {
-    border-left: 3px solid var(--ink-whisper);
+    border-left: 2px solid var(--rule-2);
     padding-left: var(--space-4);
-    margin: var(--space-6) 0;
-    color: var(--ink-faded);
-    font-style: italic;
+    margin: 0 0 1em;
+    color: var(--ink-2);
   }
 
   .editor-root :global(.milkdown a) {
     color: var(--accent);
     text-decoration: underline;
-    text-decoration-color: var(--accent-subtle);
+    text-decoration-color: var(--insert-line);
     text-underline-offset: 2px;
-  }
-
-  .editor-root :global(.milkdown a:hover) {
-    text-decoration-color: var(--accent);
   }
 
   .editor-root :global(.milkdown hr) {
     border: none;
-    border-top: 1px solid var(--paper-edge);
+    border-top: 1px solid var(--rule-2);
     margin: var(--space-10) 0;
   }
 
   .editor-root :global(.milkdown ::selection) {
-    background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
+    background: var(--accent-soft);
   }
 
+  /* Revision marks. Insertions stay editable text; deletions are read-only widgets. */
   .editor-root :global(.added) {
-    background-color: color-mix(in srgb, var(--insert-bg) 95%, transparent);
     color: var(--insert-ink);
-    padding: 1px 2px;
-    border-radius: 3px;
-    cursor: pointer;
+    background: var(--insert-bg);
+    box-shadow: inset 0 -1.5px 0 var(--insert-line);
+    border-radius: 2px;
     white-space: pre-wrap;
-    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--insert-line) 95%, transparent);
-    transition:
-      background-color var(--transition-fast),
-      color var(--transition-fast),
-      box-shadow var(--transition-fast);
+    transition: background-color var(--transition-fast);
   }
 
   .editor-root :global(.added.selected) {
-    background-color: color-mix(in srgb, var(--insert-bg) 100%, var(--paper-bright));
-    box-shadow:
-      inset 0 -1px 0 color-mix(in srgb, var(--insert-line) 100%, transparent),
-      0 0 0 1px color-mix(in srgb, var(--insert-line) 38%, transparent);
-  }
-
-  .editor-root :global(.added:hover) {
-    background-color: color-mix(in srgb, var(--insert-bg) 100%, transparent);
+    background: var(--selected-bg);
   }
 
   .editor-root :global(.struck) {
@@ -795,48 +720,26 @@
     white-space: pre-wrap;
     cursor: pointer;
     user-select: none;
-    vertical-align: baseline;
-    color: var(--struck-text);
-    background: color-mix(in srgb, var(--struck-bg) 92%, transparent);
-    border-radius: 0.35rem;
-    padding: 0.03rem 0.18rem;
+    color: var(--delete-ink);
     text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--struck-line) 96%, var(--struck-text));
-    text-decoration-thickness: 1.4px;
+    text-decoration-color: var(--delete-line);
+    text-decoration-thickness: 1.5px;
     text-decoration-skip-ink: none;
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 24%, transparent),
-      inset 0 -1px 0 color-mix(in srgb, var(--struck-line) 36%, transparent);
-    transition:
-      background-color var(--transition-fast),
-      box-shadow var(--transition-fast),
-      color var(--transition-fast);
+    border-radius: 2px;
+    padding: 0 0.1em;
+    transition: background-color var(--transition-fast);
   }
 
   .editor-root :global(.struck:hover) {
-    background: color-mix(in srgb, var(--struck-bg) 100%, transparent);
+    background: var(--hover);
   }
 
   .editor-root :global(.struck.selected) {
-    background: color-mix(in srgb, var(--struck-bg) 100%, var(--paper-bright));
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 48%, transparent),
-      0 0 0 1px color-mix(in srgb, var(--struck-line) 22%, transparent);
+    background: var(--selected-bg);
   }
 
   .editor-root :global(.struck:focus-visible) {
-    outline: none;
-  }
-
-  .editor-root :global(.struck:focus-visible) {
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--struck-line) 48%, transparent),
-      0 0 0 2px color-mix(in srgb, var(--focus-ring) 36%, transparent);
-  }
-
-  .editor-root :global(.slop-violation) {
-    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--slop-line) 95%, transparent);
-    border-radius: 2px;
-    padding: 0 1px;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 </style>

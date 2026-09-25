@@ -26,14 +26,7 @@ Run:
 
 ```bash
 pnpm install
-pnpm run check:diff
-pnpm run check:annotations
-pnpm run check:semantic
-pnpm run check:bundle
-pnpm run check:hook
-pnpm run check:lint
-pnpm run check
-pnpm run build
+pnpm run verify
 pnpm tauri:build:app
 ```
 

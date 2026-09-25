@@ -2,18 +2,33 @@
 
 All notable changes to Marginalia.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-25
 
 ### Changed
 
+- New quiet monochrome interface: native window controls, one sans (IBM Plex Sans, bundled), hairline structure, one accent for the primary action and insertions, light and dark mode.
+- Clicking inserted text now selects that edit and keeps the caret, so rationales can be added to any new edit.
+- ⌘/ explains the selected edit, and opens the rationale panel if it is hidden.
+- Escape closes the open layer first (help, popover, references, composer, notes) and only finishes the review when nothing is open.
+- `summary_for_agent.md` rewritten: each reason appears once, deletions and insertions are labelled correctly, and unexplained edits are listed.
+- Review targets and change groups became the identity layer for rationales (bundle format `3.1`, provenance `1.1`).
+- Focus mode hides the change list and rationale panel. The status bar shows edit and rationale counts, save state and clickable shortcuts.
+- Added a content security policy and a check that every CSS variable read is defined. `pnpm run verify` runs every check.
 - Replaced always-live annotation behavior with an explicit compose flow on desktop.
 - Reworked saved-note anchoring around durable annotation records and conservative remapping.
 - Marked ambiguous note remaps as stale instead of silently moving them.
 - Simplified the right-side review surface into a single rationale workflow.
 - Preserved in-progress rationale drafts in recovery snapshots.
-- Promoted the bundle contract to `3.0` and updated `annotations.json` to use stable records with target metadata.
 - Added annotation-specific regression coverage.
 - Reorganized docs into a canonical `docs/` tree and archived older handoff/spec material.
+
+### Removed
+
+- Tone and slop lint, DialKit layout tuning, and the density toggle.
+
+### Fixed
+
+- The hook no longer runs `pnpm tauri build` when it cannot find the app.
 
 ## [0.1.2] - 2026-01-26
 

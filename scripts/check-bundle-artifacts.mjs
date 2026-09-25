@@ -106,7 +106,6 @@ async function testBundleProvenanceAndPatch() {
     generalNotes: 'Keep this section factual and direct.',
     startTime: new Date(Date.now() - 150_000),
     principlesPath: '/tmp/WRITING.md',
-    lintFindings: [],
   });
 
   assert.ok(bundle.files['changes.patch'], 'expected changes.patch in bundle output');
@@ -182,10 +181,11 @@ async function testBundleProvenanceAndPatch() {
   );
 
   const summary = bundle.files['summary_for_agent.md'];
-  assert.match(summary, /# Marginalia Review Summary/, 'summary should use v3.1 heading');
-  assert.match(summary, /## High-confidence lessons for next draft/, 'summary missing lessons section');
-  assert.match(summary, /## Local edit rationales/, 'summary missing local rationales section');
-  assert.match(summary, /## Exact artifacts/, 'summary missing artifact section');
+  assert.match(summary, /^# Review of /, 'summary should open with the reviewed file');
+  assert.match(summary, /## Explained edits/, 'summary missing explained edits section');
+  assert.match(summary, /Why: /, 'summary should carry each rationale once, as Why');
+  assert.doesNotMatch(summary, /Agent lesson|High-confidence lessons/, 'summary must not repeat rationales');
+  assert.match(summary, /## Files/, 'summary missing files section');
 }
 
 async function main() {

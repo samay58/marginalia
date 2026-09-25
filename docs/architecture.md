@@ -110,8 +110,6 @@ Current schema notes:
   App orchestration, recovery, selection/composer state, bundle finalization.
 - `src/lib/stores/review-session.js`
   Shared review session state, epochs, target state, draft state, and derived annotation/diff state.
-- `src/lib/stores/app.js`
-  Compatibility facade for existing imports.
 - `src/lib/utils/diff.js`
   Stable text diff logic.
 - `src/lib/utils/annotations.js`

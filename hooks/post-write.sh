@@ -249,7 +249,7 @@ launch_and_wait() {
     return
   fi
 
-  output_hook_response "Marginalia hook matched, but no runnable app was found. Install/build Marginalia, then retry (from source: `pnpm tauri build`)."
+  output_hook_response "Marginalia hook matched, but no runnable app was found. Install/build Marginalia, then retry (from source: pnpm tauri:build:app)."
   exit 0
 }
 

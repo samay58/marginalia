@@ -16,7 +16,6 @@ const PROVENANCE_SCHEMA_VERSION = '1.1';
  * @typedef {import('./diff.js').Change} Change
  * @typedef {import('./diff.js').DiffResult} DiffResult
  * @typedef {import('./semantic-diff.js').SemanticChange} SemanticChange
- * @typedef {{ label: string, line: number, match: string, snippet: string, category?: string | null, suggestion?: string | null }} LintFinding
  */
 
 /**
@@ -257,7 +256,6 @@ export function generateAnnotationsJson(annotations, generalNotes) {
  * @param {SemanticChange[]} options.semanticChanges
  * @param {ResolvedAnnotation[]} options.annotations
  * @param {any[]} [options.reviewTargets]
- * @param {LintFinding[]} options.lintFindings
  * @param {string | null | undefined} options.principlesPath
  * @param {string} options.patchContent
  * @param {Record<string, string>} options.artifactHashes
@@ -273,7 +271,6 @@ export function generateProvenanceJson({
   semanticChanges,
   annotations,
   reviewTargets = [],
-  lintFindings,
   principlesPath,
   patchContent,
   artifactHashes,
@@ -310,7 +307,6 @@ export function generateProvenanceJson({
       review_targets_total: reviewTargets.length,
       review_targets_active: reviewTargets.filter((target) => target.status === 'active').length,
       review_targets_stale: reviewTargets.filter((target) => target.status === 'stale').length,
-      lint_findings: lintFindings.length,
       patch_hunks: patchHunkCount,
     },
     artifacts: Object.keys(artifactHashes)
@@ -331,7 +327,6 @@ export function generateProvenanceJson({
  * @param {ResolvedAnnotation[]} annotations
  * @param {string} generalNotes
  * @param {number} sessionDuration
- * @param {LintFinding[]} [lintFindings]
  * @returns {string}
  */
 export function generateSummaryMarkdown(
@@ -340,126 +335,145 @@ export function generateSummaryMarkdown(
   semanticChanges,
   annotations,
   generalNotes,
-  sessionDuration,
-  lintFindings = []
+  sessionDuration
 ) {
-  const lines = [];
-  const minutesLabel = sessionDuration < 60 ? '<1 min' : `${Math.round(sessionDuration / 60)} min`;
+  const minutesLabel = sessionDuration < 60 ? 'under a minute' : `${Math.round(sessionDuration / 60)} min`;
   const active = annotations.filter((entry) => entry.status === 'active');
   const stale = annotations.filter((entry) => entry.status === 'stale');
+  const groups = createChangeGroups(diffResult.changes || []);
+  const explainedChangeIds = new Set(
+    active.flatMap((entry) => [entry.change?.id, entry.resolvedChangeId, entry.annotation.target.changeId]).filter(Boolean)
+  );
+  const unexplained = groups.filter((group) => !group.changeIds.some((id) => explainedChangeIds.has(id)));
+  const notes = (generalNotes || '').trim();
 
-  lines.push('# Marginalia Review Summary');
+  const lines = [];
+  lines.push(`# Review of ${filename}`);
   lines.push('');
-  lines.push('## Outcome');
-  lines.push(`- Original file: ${filename}`);
-  lines.push(`- Reviewed at: ${new Date().toISOString().slice(0, 10)}`);
-  lines.push(`- Review duration: ${minutesLabel}`);
-  lines.push(`- Final status: completed`);
-  lines.push(`- Total visible changes: ${(diffResult.changes || []).filter((change) => change.text?.trim()).length}`);
-  lines.push(`- Text changes: ${diffResult.deletions || 0} deletions, ${diffResult.insertions || 0} insertions`);
-  lines.push(`- Semantic markdown changes: ${semanticChanges.length}`);
-  lines.push(`- Rationales: ${active.length}`);
-  lines.push(`- Stale rationales: ${stale.length}`);
+  lines.push(
+    `The user made ${plural(groups.length, 'edit')} and explained ${active.length}. ` +
+      `The review took ${minutesLabel}.`
+  );
   lines.push('');
-
-  lines.push('## High-confidence lessons for next draft');
-  if (active.length === 0) {
-    lines.push('No local rationales were captured.');
-  } else {
-    active.slice(0, 5).forEach((entry, index) => {
-      lines.push(`${index + 1}. ${entry.annotation.rationale}`);
-    });
-  }
+  lines.push(
+    'Start from final.md, which is the user\'s version of the draft. Use the reasons below to understand ' +
+      'what they want, and apply the same judgment to the rest of the draft and to future drafts.'
+  );
   lines.push('');
 
-  lines.push('## Local edit rationales');
-  if (active.length === 0) {
-    lines.push('No change-bound rationales.');
+  if (notes) {
+    lines.push('## Session notes');
+    lines.push('');
+    lines.push(notes);
     lines.push('');
   }
 
+  lines.push('## Explained edits');
+  lines.push('');
+  if (active.length === 0) {
+    lines.push('None. The user edited without giving reasons.');
+    lines.push('');
+  }
   active.forEach((entry, index) => {
-    const entryAny = /** @type {any} */ (entry);
-    const annotationAny = /** @type {any} */ (entry.annotation);
-    const descriptor = annotationAny.targetSnapshot || entryAny.reviewTarget?.descriptor || {};
-    const before = descriptor.beforeExcerpt || entry.annotation.target.excerpt || '';
-    const after = descriptor.afterExcerpt || entry.change?.text || '';
-    const preview = after || before || `Edit ${index + 1}`;
-    lines.push(`### Edit ${index + 1}: ${preview.slice(0, 64)}${preview.length > 64 ? '...' : ''}`);
-    if (before) {
-      lines.push('');
-      lines.push('Before:');
-      lines.push(`> ${before}`);
+    const edit = describeAnnotatedEdit(entry);
+    lines.push(`${index + 1}. ${edit.kind}${edit.line ? `, line ${edit.line}` : ''}`);
+    for (const [label, text] of edit.parts) {
+      lines.push(`   ${label}: ${quote(text)}`);
     }
-    if (after) {
-      lines.push('');
-      lines.push('After:');
-      lines.push(`> ${after}`);
-    }
-    lines.push('');
-    lines.push('Rationale:');
-    lines.push(`> ${entry.annotation.rationale}`);
-    lines.push('');
-    lines.push('Agent lesson:');
-    lines.push(`- ${entry.annotation.rationale}`);
-    lines.push('');
-    lines.push('Confidence:');
-    lines.push(`- target resolution: ${annotationAny.resolution?.strategy || entryAny.reviewTarget?.resolution?.strategy || 'exact'}`);
-    lines.push(`- annotation status: ${entry.status}`);
+    lines.push(`   Why: ${oneLine(entry.annotation.rationale)}`);
     lines.push('');
   });
 
+  if (unexplained.length > 0) {
+    lines.push('## Other edits');
+    lines.push('');
+    for (const group of unexplained) {
+      const edit = describeGroup(group);
+      const detail = edit.parts.map(([label, text]) => `${label.toLowerCase()} ${quote(text)}`).join(', ');
+      lines.push(`- Line ${edit.line}, ${detail}`);
+    }
+    lines.push('');
+  }
+
   if (semanticChanges.length > 0) {
-    lines.push('## Structural & Semantic Changes');
+    lines.push('## Structure changes');
+    lines.push('');
     for (const change of semanticChanges) {
       lines.push(`- ${formatSemanticChange(change)}`);
     }
     lines.push('');
   }
 
-  if (generalNotes) {
-    lines.push('## Global session notes');
-    lines.push(generalNotes);
+  if (stale.length > 0) {
+    lines.push('## Stale reasons');
     lines.push('');
-  }
-
-  lines.push('## Stale or ambiguous notes');
-  if (stale.length === 0) {
-    lines.push('No stale notes.');
-  } else {
-    lines.push('These notes should not be treated as reliable edit-specific feedback.');
+    lines.push('These no longer match an edit in final.md. Treat them as general guidance, not instructions for a specific line.');
+    lines.push('');
     for (const entry of stale) {
-      lines.push(`- ${entry.annotation.rationale}`);
-      if (entry.annotation.target.excerpt) {
-        lines.push(`  - Last target: "${entry.annotation.target.excerpt}"`);
-      }
-      const annotationAny = /** @type {any} */ (entry.annotation);
-      lines.push(`  - Status: stale (${annotationAny.resolution?.staleReason || entry.reason || 'requires human confirmation'})`);
-    }
-  }
-  lines.push('');
-
-  if (lintFindings.length > 0) {
-    lines.push('## Tone & Slop Flags');
-    for (const finding of lintFindings) {
-      const category = finding.category ? `[${finding.category}] ` : '';
-      const preview = finding.snippet || finding.match;
-      lines.push(`- ${category}${finding.label} (line ${finding.line}): "${preview}"`);
-      if (finding.suggestion) {
-        lines.push(`  - Suggestion: ${finding.suggestion}`);
-      }
+      const excerpt = entry.annotation.target.excerpt;
+      lines.push(`- ${oneLine(entry.annotation.rationale)}${excerpt ? ` (was attached to ${quote(excerpt)})` : ''}`);
     }
     lines.push('');
   }
 
-  lines.push('## Exact artifacts');
-  lines.push('- final.md');
-  lines.push('- changes.patch');
-  lines.push('- changes.json');
-  lines.push('- annotations.json');
-  lines.push('- provenance.json');
+  lines.push('## Files');
+  lines.push('');
+  lines.push('- final.md: the user\'s version');
+  lines.push('- changes.patch: exact line diff from original.md');
+  lines.push('- annotations.json, changes.json, provenance.json: the same review as structured data');
 
   return lines.join('\n');
+}
+
+/** @param {number} count @param {string} noun */
+function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** @param {string} text */
+function oneLine(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+/** @param {string} text */
+function quote(text) {
+  const flat = oneLine(text);
+  return `"${flat.length > 240 ? `${flat.slice(0, 239)}…` : flat}"`;
+}
+
+/**
+ * @param {string} before
+ * @param {string} after
+ * @returns {{ kind: string, parts: Array<[string, string]> }}
+ */
+function describeBeforeAfter(before, after) {
+  if (before.trim() && after.trim()) return { kind: 'Replaced', parts: [['Before', before], ['After', after]] };
+  if (before.trim()) return { kind: 'Deleted', parts: [['Removed', before]] };
+  if (after.trim()) return { kind: 'Inserted', parts: [['Added', after]] };
+  return { kind: 'Note on the whole draft', parts: [] };
+}
+
+/** @param {any} group */
+function describeGroup(group) {
+  return {
+    ...describeBeforeAfter(group.descriptor?.beforeExcerpt || '', group.descriptor?.afterExcerpt || ''),
+    line: group.descriptor?.lineStart ?? group.changes?.[0]?.location?.line ?? 1,
+  };
+}
+
+/** @param {ResolvedAnnotation} entry */
+function describeAnnotatedEdit(entry) {
+  const entryAny = /** @type {any} */ (entry);
+  const annotationAny = /** @type {any} */ (entry.annotation);
+  const descriptor = annotationAny.targetSnapshot || entryAny.reviewTarget?.descriptor || null;
+  const change = entry.change || null;
+  const line = change?.location?.line ?? descriptor?.lineStart ?? entry.annotation.target.line ?? null;
+  if (descriptor && (descriptor.beforeExcerpt || descriptor.afterExcerpt)) {
+    return { ...describeBeforeAfter(descriptor.beforeExcerpt || '', descriptor.afterExcerpt || ''), line };
+  }
+  const text = change?.text || entry.annotation.target.excerpt || '';
+  const type = change?.type || entry.annotation.target.type;
+  return { ...describeBeforeAfter(type === 'deletion' ? text : '', type === 'deletion' ? '' : text), line };
 }
 
 /**
@@ -475,7 +489,6 @@ export function generateSummaryMarkdown(
  * @param {string} options.generalNotes
  * @param {Date} options.startTime
  * @param {string | null} [options.principlesPath]
- * @param {LintFinding[]} [options.lintFindings]
  * @returns {Promise<{ bundleName: string, files: Record<string, string> }>} Bundle with all file contents
  */
 export async function generateBundle({
@@ -489,7 +502,6 @@ export async function generateBundle({
   generalNotes,
   startTime,
   principlesPath,
-  lintFindings = [],
 }) {
   const filename = filePath.split('/').pop() || 'untitled.md';
   const baseName = getBaseName(filePath);
@@ -519,8 +531,7 @@ export async function generateBundle({
     semanticChanges,
     annotations,
     generalNotes,
-    sessionDuration,
-    lintFindings
+    sessionDuration
   );
   const patchContent = generatePatchContent(originalContent, editedContent);
 
@@ -545,8 +556,7 @@ export async function generateBundle({
       semanticChanges,
       annotations,
       reviewTargets,
-      lintFindings,
-      principlesPath,
+          principlesPath,
       patchContent,
       artifactHashes,
       artifactBytes,

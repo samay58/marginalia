@@ -9,13 +9,9 @@
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
   import ReferencePane from '$lib/components/ReferencePane.svelte';
   import SessionDrawer from '$lib/components/SessionDrawer.svelte';
-  import WindowFrame from '$lib/components/chrome/WindowFrame.svelte';
-  import TitleBar from '$lib/components/chrome/TitleBar.svelte';
-  import AppHeader from '$lib/components/chrome/AppHeader.svelte';
-  import TabStrip from '$lib/components/chrome/TabStrip.svelte';
-  import BottomShortcutBar from '$lib/components/chrome/BottomShortcutBar.svelte';
-  import HelpModal from '$lib/components/chrome/HelpModal.svelte';
-  import PreferencesPanel from '$lib/components/chrome/PreferencesPanel.svelte';
+  import TopBar from '$lib/components/shell/TopBar.svelte';
+  import StatusBar from '$lib/components/shell/StatusBar.svelte';
+  import HelpSheet from '$lib/components/shell/HelpSheet.svelte';
   import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
@@ -67,56 +63,11 @@
     setReviewStatus,
     setSelectedChange,
     clearSelectedChange,
-  } from '$lib/stores/app.js';
-  import {
-    tabMode,
-    rationaleState,
-    toggleRationaleClosed,
-    toggleRationaleMinimized,
-    toggleRationaleMaximized,
-  } from '$lib/stores/review-ui.js';
+  } from '$lib/stores/review-session.js';
   import { generateBundle } from '$lib/utils/bundle.js';
   import { createAnnotationRecord, reanchorAnnotation } from '$lib/utils/annotations.js';
   import { computeDiff } from '$lib/utils/diff.js';
   import { computeSemanticChanges } from '$lib/utils/semantic-diff.js';
-  import { DialStore } from 'dialkit/store';
-  import { get } from 'svelte/store';
-  import { preferences } from '$lib/stores/preferences.js';
-
-  // DialKit: live-tunable desk layout parameters
-  const DESK_PANEL_ID = 'review-desk';
-  /** @type {Record<string, [number, number, number, number]>} */
-  const DESK_CONFIG = {
-    railWidth: [240, 160, 360, 4],
-    rightWidth: [304, 200, 440, 4],
-    gap: [32, 8, 64, 2],
-    paddingX: [28, 8, 56, 2],
-    gutterWidth: [56, 24, 96, 2],
-    contentMax: [672, 480, 840, 8],
-    lineHeight: [27, 20, 40, 1],
-    headerHeight: [52, 36, 72, 2],
-  };
-
-  /** @type {Map<string, string>} */
-  const DESK_CSS_MAP = new Map([
-    ['railWidth', '--desk-rail-width'],
-    ['rightWidth', '--desk-right-width'],
-    ['gap', '--desk-gap'],
-    ['paddingX', '--desk-padding-x'],
-    ['gutterWidth', '--gutter-width'],
-    ['contentMax', '--content-max-width'],
-    ['lineHeight', '--line-height'],
-    ['headerHeight', '--header-height'],
-  ]);
-
-  function applyDeskValues() {
-    const vals = DialStore.getValues(DESK_PANEL_ID);
-    const s = document.documentElement.style;
-    for (const [key, prop] of DESK_CSS_MAP) {
-      const v = vals[key];
-      if (typeof v === 'number') s.setProperty(prop, `${v}px`);
-    }
-  }
 
   // Local state
   let notesExpanded = $state(false);
@@ -130,7 +81,6 @@
   let popoverDraft = $state('');
   let popoverAnnotationId = $state('');
   let popoverTargetId = $state('');
-  let isDark = $state(false);
   /** @type {any} */
   let editorRef = $state(null);
   /** @type {any} */
@@ -147,20 +97,21 @@
   let cliOutPath = $state('');
   let cliPrinciplesPath = $state('');
   let cliInitialPath = $state('');
-  /** @type {'review' | 'manuscript'} */
-  let densityMode = $state('manuscript');
-
-  const showRail = $derived($tabMode === 'review');
-  const showRationale = $derived($tabMode === 'review' && $rationaleState !== 'closed');
-  const rationaleMinimized = $derived($rationaleState === 'minimized');
-  const rationaleMaximized = $derived($rationaleState === 'maximized');
-  const breadcrumb = [
-    { label: 'All drafts' },
-    { label: 'Product Brief' },
-    { label: 'Draft Review', active: true }
-  ];
+  /** Review shows the change list and rationale panel; focus shows only the manuscript. */
+  let viewMode = $state(/** @type {'review' | 'focus'} */ ('review'));
+  let rationaleOpen = $state(true);
   let helpOpen = $state(false);
-  let preferencesOpen = $state(false);
+
+  const showRail = $derived(viewMode === 'review');
+  const showRationale = $derived(viewMode === 'review' && rationaleOpen && !compactLayout);
+  const titleParts = $derived.by(() => {
+    const path = $filePath || '';
+    const segments = path.split('/').filter(Boolean);
+    return {
+      name: $filename || segments.at(-1) || 'Untitled draft',
+      folder: segments.length > 1 ? segments.at(-2) : '',
+    };
+  });
   /** @type {null | ((rationale: string) => string | null)} */
   let writingRuleMatcher = $state(null);
   /** @type {null | (() => void)} */
@@ -170,32 +121,14 @@
 
   let homeDir = $state('');
   let sessionId = $state('');
+  // Set once a session is finished or discarded. A late autosave must never
+  // mark it active again, or the next launch offers to resume a done review.
+  let sessionClosed = false;
   let snapshotPath = $state('');
   let activeSessionStatePath = $state('');
   let autosaveState = $state('idle');
-  /** Wall-clock timestamp in ms when the last save completed; drives the
-   *  sticky-green LED for STICKY_SAVED_MS afterward. */
-  let lastSavedAt = $state(0);
-  const STICKY_SAVED_MS = 2000;
-  let savedTick = $state(0);
-  $effect(() => {
-    // Keep the LED green for STICKY_SAVED_MS after lastSavedAt, then tick to
-    // revert. Reads lastSavedAt as a dep so it resets on every save.
-    if (!lastSavedAt) return;
-    const elapsed = Date.now() - lastSavedAt;
-    const remaining = STICKY_SAVED_MS - elapsed;
-    if (remaining <= 0) return;
-    const id = setTimeout(() => { savedTick++; }, remaining + 20);
-    return () => clearTimeout(id);
-  });
-  // The LED lights briefly after each autosave; the label stays truthful the whole time.
-  const saveFresh = $derived.by(() => {
-    savedTick; // dependency only, no read value
-    if (autosaveState !== 'saved' || !lastSavedAt) return false;
-    return Date.now() - lastSavedAt < STICKY_SAVED_MS;
-  });
-  const saveLabel = $derived(
-    autosaveState === 'saving' ? 'SAVING' : autosaveState === 'error' ? 'NOT SAVED' : 'SAVED'
+  const saveState = $derived(
+    !sessionId ? 'none' : autosaveState === 'saving' ? 'saving' : autosaveState === 'error' ? 'error' : 'saved'
   );
   let isHydratingSnapshot = $state(false);
   let hasInitialDocument = $state(false);
@@ -220,7 +153,6 @@
   const SNAPSHOT_VERSION = 2;
   const AUTOSAVE_DEBOUNCE_MS = 900;
   const REF_STORAGE_KEY = 'marginalia.references';
-  const DENSITY_STORAGE_KEY = 'marginalia.density';
 
   const editCount = $derived.by(() => $visibleChanges?.length ?? 0);
   const selectedAnnotationEntry = $derived.by(() => {
@@ -392,7 +324,7 @@
    * @param {string} reason
    */
   async function persistSnapshot(reason) {
-    if (!snapshotPath || !sessionId || !hasInitialDocument || isHydratingSnapshot) return;
+    if (sessionClosed || !snapshotPath || !sessionId || !hasInitialDocument || isHydratingSnapshot) return;
     autosaveState = 'saving';
     try {
       const pendingAnnotation = getPendingAnnotationSnapshot();
@@ -429,9 +361,9 @@
           principles_path: cliPrinciplesPath || null,
         },
       });
+      if (sessionClosed) return;
       await writeActiveSessionState(true, 'autosave');
       autosaveState = 'saved';
-      lastSavedAt = Date.now();
     } catch (e) {
       autosaveState = 'error';
       console.error('Autosave failed:', e);
@@ -442,7 +374,7 @@
    * @param {string} reason
    */
   function scheduleAutosave(reason) {
-    if (!snapshotPath || !sessionId || !hasInitialDocument || isHydratingSnapshot) return;
+    if (sessionClosed || !snapshotPath || !sessionId || !hasInitialDocument || isHydratingSnapshot) return;
     clearAutosaveTimer();
     autosaveTimeout = setTimeout(() => {
       persistSnapshot(reason).catch((e) => {
@@ -470,6 +402,7 @@
     if (!resolvedHome) return;
 
     const paths = computeSessionPaths(resolvedHome, newSessionId);
+    sessionClosed = false;
     sessionId = newSessionId;
     snapshotPath = paths.snapshotPath;
     activeSessionStatePath = paths.activeStatePath;
@@ -481,6 +414,7 @@
    * @param {string} reason
    */
   async function deactivateSession(reason) {
+    sessionClosed = true;
     clearAutosaveTimer();
     await writeActiveSessionState(false, reason);
   }
@@ -562,31 +496,12 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
-    // DialKit: register panel and subscribe only when the live-tuning handle is enabled
-    const dialkitEnabled =
-      import.meta.env.VITE_DIALKIT === '1' || get(preferences).showDialkitHandle;
-    /** @type {null | (() => void)} */
-    let unsubDesk = null;
-    if (dialkitEnabled) {
-      DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
-      applyDeskValues();
-      unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
-    }
-
-    if (!tauriAvailable) {
-      return () => {
-        if (dialkitEnabled) {
-          if (unsubDesk) unsubDesk();
-          DialStore.unregisterPanel(DESK_PANEL_ID);
-        }
-      };
-    }
+    if (!tauriAvailable) return;
 
     /** @type {() => void} */
     let cleanup = () => {};
 
     const init = async () => {
-      restoreDensityMode();
       updateLayoutMode();
 
       // Check for CLI options and load initial document (or recovery prompt)
@@ -645,27 +560,12 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         }
       });
 
-      // Check for dark mode preference
-      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      }
-
-      // Listen for dark mode changes
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      /** @param {MediaQueryListEvent} e */
-      const handleChange = (e) => {
-        isDark = e.matches;
-        document.documentElement.classList.toggle('dark', isDark);
-      };
-      mediaQuery.addEventListener('change', handleChange);
       window.addEventListener('resize', updateLayoutMode);
 
       await restoreReferenceFiles();
 
       return () => {
         clearAutosaveTimer();
-        mediaQuery.removeEventListener('change', handleChange);
         window.removeEventListener('resize', updateLayoutMode);
         if (closeRequestedUnlisten) {
           closeRequestedUnlisten();
@@ -683,13 +583,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
         console.error('Error initializing app:', e);
       });
 
-    return () => {
-      cleanup();
-      if (dialkitEnabled) {
-        if (unsubDesk) unsubDesk();
-        DialStore.unregisterPanel(DESK_PANEL_ID);
-      }
-    };
+    return () => cleanup();
   });
 
   function updateLayoutMode() {
@@ -985,6 +879,7 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     }
 
     hasInitialDocument = true;
+    sessionClosed = false;
     sessionId = recoveryCandidate.sessionId || createSessionId();
     snapshotPath = recoveryCandidate.snapshotPath;
     activeSessionStatePath = recoveryCandidate.activeStatePath;
@@ -1030,7 +925,19 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     }
   }
 
+  let finishing = false;
+
   async function handleDone() {
+    if (finishing) return;
+    finishing = true;
+    try {
+      await finishReview();
+    } finally {
+      finishing = false;
+    }
+  }
+
+  async function finishReview() {
     setReviewStatus('finalizing');
     await persistSnapshot('done-invoked');
     const changesMade = $hasChanges;
@@ -1084,8 +991,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       semanticChanges = [];
     }
 
-    /** @type {import('$lib/utils/lint.js').LintFinding[]} */
-    const lintFindings = [];
     const degradedSummary = getDegradedSummaryNote();
     const mergedGeneralNotes = [$generalNotes, degradedSummary]
       .map((entry) => (entry || '').trim())
@@ -1105,7 +1010,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       generalNotes: mergedGeneralNotes,
       startTime: $startTime,
       principlesPath: cliPrinciplesPath || null,
-      lintFindings,
     });
 
     console.log('Generated bundle:', bundle.bundleName);
@@ -1166,42 +1070,61 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       }
       return;
     }
+    // Fields that handle their own keys (the rationale composer) mark the event.
+    if (event.defaultPrevented) return;
 
     if (event.key === 'Escape') {
-      if (popoverVisible) {
-        popoverVisible = false;
-      } else if (referenceDrawerOpen) {
-        referenceDrawerOpen = false;
-      } else {
-        handleDone();
-      }
+      event.preventDefault();
+      closeTopLayerOrFinish();
+      return;
     }
-    if (event.metaKey && event.key === 'Enter') {
+    if (!event.metaKey) return;
+
+    const key = event.key.toLowerCase();
+    if (key === 'enter') {
+      event.preventDefault();
       handleDone();
-    }
-    if (event.metaKey && event.key === 'g') {
+    } else if (key === 'g') {
       event.preventDefault();
       toggleSessionDrawer();
-    }
-    if (event.metaKey && event.key === '/') {
+    } else if (key === '/') {
       event.preventDefault();
       handleAnnotationShortcut();
-    }
-    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'r') {
+    } else if (event.shiftKey && key === 'r') {
       event.preventDefault();
-      toggleRationaleClosed();
-      return;
-    }
-    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'o') {
+      rationaleOpen = !rationaleOpen;
+    } else if (event.shiftKey && key === 'o') {
       event.preventDefault();
       toggleReferenceSurface();
-      return;
-    }
-    if (event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'o') {
+    } else if (key === 'o') {
       event.preventDefault();
-      // Open file picker to load a different file
       pickAndLoadFile();
     }
+  }
+
+  /** Escape peels one layer at a time; with nothing open it finishes the review. */
+  function closeTopLayerOrFinish() {
+    if (helpOpen) {
+      helpOpen = false;
+    } else if (popoverVisible) {
+      clearPopoverState();
+    } else if (referenceDrawerOpen) {
+      referenceDrawerOpen = false;
+    } else if (composerOpen) {
+      closeComposer();
+    } else if (notesExpanded) {
+      notesExpanded = false;
+    } else {
+      handleDone();
+    }
+  }
+
+  /** @param {string} id */
+  function handleShortcut(id) {
+    if (id === 'rationale') handleAnnotationShortcut();
+    else if (id === 'notes') toggleSessionDrawer();
+    else if (id === 'references') toggleReferenceSurface();
+    else if (id === 'undo') editorRef?.undo?.();
   }
 
   /** @param {string} content */
@@ -1351,10 +1274,13 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   }
 
   function handleAnnotationShortcut() {
-    const nearest = findNearestChange($currentLine ?? 1);
+    const nearest = $selectedChange || findNearestChange($currentLine ?? 1);
     if (!nearest) return;
     selectChange(nearest, { openPopover: compactLayout });
     if (compactLayout) return;
+    // The composer lives in the rationale panel, so make sure it is on screen.
+    viewMode = 'review';
+    rationaleOpen = true;
     handleStartCompose();
   }
 
@@ -1647,161 +1573,83 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     clearPopoverState();
   }
 
-  function restoreDensityMode() {
-    try {
-      const saved = localStorage.getItem(DENSITY_STORAGE_KEY);
-      if (saved === 'review' || saved === 'manuscript') {
-        densityMode = saved;
-      }
-    } catch {
-      // Ignore storage errors and keep default mode.
-    }
-  }
-
-  /**
-   * @param {'review' | 'manuscript'} mode
-   */
-  function setDensityMode(mode) {
-    if (mode !== 'review' && mode !== 'manuscript') return;
-    densityMode = mode;
-    try {
-      localStorage.setItem(DENSITY_STORAGE_KEY, mode);
-    } catch {
-      // Ignore storage errors in constrained environments.
-    }
-  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
 {#if !tauriAvailable}
   <div class="web-fallback">
-    <div class="web-fallback-inner glass-surface glass-surface-ambient">
-      <div class="web-fallback-badge">Desktop-only review UI</div>
-      <h1 class="web-fallback-title">Marginalia Review</h1>
-      <p class="web-fallback-copy">
-        This route runs inside the Marginalia macOS app (it relies on Tauri file APIs). For the overview and install steps, head to
-        the homepage.
-      </p>
+    <div class="web-fallback-inner">
+      <h1>Marginalia runs as a Mac app</h1>
+      <p>This review screen needs the desktop app's file access. The homepage has the overview and install steps.</p>
       <div class="web-fallback-actions">
-        <a class="web-fallback-btn control-motion control-focus control-raise" href="/">Go to the homepage</a>
-        <a
-          class="web-fallback-btn secondary control-motion control-focus control-raise"
-          href="https://github.com/samay58/marginalia"
-          target="_blank"
-          rel="noreferrer"
-        >
-          GitHub
-        </a>
+        <a class="btn btn-primary" href="/">Homepage</a>
+        <a class="btn" href="https://github.com/samay58/marginalia" target="_blank" rel="noreferrer">GitHub</a>
       </div>
     </div>
   </div>
 {:else}
-<WindowFrame>
-  <TitleBar title="Marginalia — Draft Review" />
-  <AppHeader
-    {breadcrumb}
-    onHelp={() => (helpOpen = true)}
-    onPreferences={() => (preferencesOpen = true)}
-  />
-  <TabStrip
-    tabs={[{ id: 'review', label: 'Review' }, { id: 'manuscript', label: 'Manuscript' }]}
-    activeId={$tabMode}
-    onSelect={(id) => tabMode.set(/** @type {'review' | 'manuscript'} */ (id))}
-  />
+  <div class="app">
+    <TopBar
+      title={titleParts.name}
+      folder={titleParts.folder}
+      mode={viewMode}
+      onModeChange={(mode) => (viewMode = mode)}
+      onHelp={() => (helpOpen = true)}
+      onDone={handleDone}
+    />
 
-  <div
-    class="content-area app"
-    class:density-review={densityMode === 'review'}
-    class:density-manuscript={densityMode === 'manuscript'}
-    class:mode-manuscript={$tabMode === 'manuscript'}
-    class:rationale-max={rationaleMaximized}
-  >
-  {#if recoveryCandidate}
-    <div class="recovery-overlay">
-      <div class="recovery-modal glass-surface glass-surface-focal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
-        <h2 id="recovery-title">Resume previous review?</h2>
-        <p class="recovery-copy">
-          Marginalia found an unfinished review session. You can resume exactly where you left off, or discard it and start fresh.
-        </p>
-        <dl class="recovery-meta">
-          <div>
-            <dt>File</dt>
-            <dd>{recoveryCandidate.filePath || '(unknown file)'}</dd>
-          </div>
-          <div>
-            <dt>Last autosave</dt>
-            <dd>{recoveryCandidate.updatedAt || 'Unknown'}</dd>
-          </div>
-        </dl>
-        <div class="recovery-actions">
-          <button class="discard-btn control-motion control-focus control-raise" onclick={discardRecoveredSession}>Discard</button>
-          <button class="resume-btn control-motion control-focus control-raise" onclick={resumeRecoveredSession}>Resume Session</button>
-        </div>
-      </div>
-    </div>
-  {/if}
-
-  {#if degradedMode && !recoveryCandidate}
-    <div class="degraded-banner" role="status" aria-live="polite">
-      <span>Degraded mode active. Editing and bundle capture still work; some highlights may be unavailable.</span>
-    </div>
-  {/if}
-
-  <main class="desk" class:compact={compactLayout}>
-    {#if showRail}
-      <ChangeRail
-        changes={$substantiveChanges}
-        groups={$substantiveChangeGroups.map((group) => ({
-          ...group,
-          targetId: targetIdForGroup(group),
-        }))}
-        trivialChanges={$trivialChanges}
-        trivialCount={$trivialChangeCount}
-        annotationChangeIds={$annotatedChangeIds}
-        annotationTargetIds={$annotatedTargetIds}
-        annotationCount={$annotationEntries.length}
-        selectedChangeId={$selectedChangeId}
-        selectedTargetId={$selectedTargetId}
-        currentLine={$currentLine}
-        onSelectChange={handleRailChangeSelect}
-        onSelectGroup={handleRailGroupSelect}
-      />
+    {#if degradedMode && !recoveryCandidate}
+      <p class="notice" role="status">Some highlights are unavailable. Editing, rationales and the bundle still work.</p>
     {/if}
 
-    <div class="editor-column">
-      <Editor
-        bind:this={editorRef}
-        initialContent={$editedContent}
-        diffResult={$diffResult}
-        annotationEntries={$annotationEntries}
-        selectedAnnotationId={selectedAnnotationId}
-        selectedChangeId={$selectedChangeId}
-        {densityMode}
-        onChange={handleContentChange}
-        onPlainTextChange={handlePlainTextChange}
-        onInitialRender={handleInitialRender}
-        onLineChange={handleLineChange}
-        getDiffResult={() => $diffResult}
-        onClickChange={handleEditorChangeClick}
-        onSelectAnchor={handleAnchorSelect}
-        onRuntimeError={handleEditorRuntimeError}
-      />
-    </div>
+    <main class="desk">
+      {#if showRail}
+        <ChangeRail
+          changes={$substantiveChanges}
+          groups={$substantiveChangeGroups.map((group) => ({
+            ...group,
+            targetId: targetIdForGroup(group),
+          }))}
+          trivialChanges={$trivialChanges}
+          trivialCount={$trivialChangeCount}
+          annotationChangeIds={$annotatedChangeIds}
+          annotationTargetIds={$annotatedTargetIds}
+          annotationCount={$annotationEntries.length}
+          selectedChangeId={$selectedChangeId}
+          selectedTargetId={$selectedTargetId}
+          currentLine={$currentLine}
+          onSelectChange={handleRailChangeSelect}
+          onSelectGroup={handleRailGroupSelect}
+        />
+      {/if}
 
-    {#if showRationale && !compactLayout}
-      <section class="right-pane-shell">
+      <div class="editor-column">
+        <Editor
+          bind:this={editorRef}
+          initialContent={$editedContent}
+          diffResult={$diffResult}
+          annotationEntries={$annotationEntries}
+          selectedAnnotationId={selectedAnnotationId}
+          selectedChangeId={$selectedChangeId}
+          onChange={handleContentChange}
+          onPlainTextChange={handlePlainTextChange}
+          onInitialRender={handleInitialRender}
+          onLineChange={handleLineChange}
+          getDiffResult={() => $diffResult}
+          onClickChange={handleEditorChangeClick}
+          onSelectAnchor={handleAnchorSelect}
+          onRuntimeError={handleEditorRuntimeError}
+        />
+      </div>
+
+      {#if showRationale}
         <AnnotationColumn
           bind:this={annotationColumnRef}
-          minimized={rationaleMinimized}
-          maximized={rationaleMaximized}
-          onMinimize={toggleRationaleMinimized}
-          onMaximize={toggleRationaleMaximized}
-          onClose={toggleRationaleClosed}
+          onClose={() => (rationaleOpen = false)}
           selectedChange={$selectedChange}
           selectedAnnotationEntry={selectedAnnotationEntry}
           annotationEntries={$annotationEntries}
-          {densityMode}
           isComposing={composerOpen}
           composerDraft={composerDraft}
           onSelectChange={handleAnnotationCardSelect}
@@ -1813,34 +1661,34 @@ Open a lightweight review surface directly from the CLI session, capture edits +
           onRemoveSelected={handleRemoveSelected}
           onReattachSelected={handleReattachSelected}
         />
-      </section>
-    {/if}
-  </main>
+      {/if}
+    </main>
+
+    <SessionDrawer
+      open={notesExpanded}
+      generalNotes={$generalNotes}
+      onNotesInput={handleNotesChange}
+    />
+
+    <StatusBar
+      edits={editCount}
+      rationales={$annotationEntries.length}
+      {saveState}
+      onShortcut={handleShortcut}
+    />
+  </div>
 
   {#if referenceDrawerOpen}
-    <div
-      class="reference-drawer-scrim"
-      role="button"
-      tabindex="-1"
-      aria-label="Close reference drawer"
-      onclick={() => referenceDrawerOpen = false}
-      onkeydown={(event) => event.key === 'Escape' && (referenceDrawerOpen = false)}
-    ></div>
+    <div class="scrim" role="presentation" onclick={() => (referenceDrawerOpen = false)}></div>
     <div class="reference-drawer">
       <ReferencePane
         {referenceFiles}
         {activeReferenceIndex}
-        onSelectIndex={(index) => activeReferenceIndex = index}
+        onSelectIndex={(index) => (activeReferenceIndex = index)}
         onPickReferenceFile={pickReferenceFile}
       />
     </div>
   {/if}
-
-  <SessionDrawer
-    open={notesExpanded}
-    generalNotes={$generalNotes}
-    onNotesInput={handleNotesChange}
-  />
 
   <AnnotationPopover
     changeId={popoverChangeId}
@@ -1855,334 +1703,157 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onRemove={handlePopoverRemove}
     onClose={handlePopoverClose}
   />
-  </div>
 
-  <BottomShortcutBar
-    edits={editCount}
-    annotations={$annotationEntries.length}
-    {saveLabel}
-    {saveFresh}
-    saveFailed={autosaveState === 'error'}
-    onNotes={toggleSessionDrawer}
-    onRationale={handleAnnotationShortcut}
-    onAddRef={toggleReferenceSurface}
-    onUndo={() => { try { document.execCommand('undo'); } catch {} }}
-    onDone={handleDone}
-  />
-  <HelpModal open={helpOpen} onClose={() => (helpOpen = false)} />
-  <PreferencesPanel open={preferencesOpen} onClose={() => (preferencesOpen = false)} />
-</WindowFrame>
+  <HelpSheet open={helpOpen} onClose={() => (helpOpen = false)} />
+
+  {#if recoveryCandidate}
+    <div class="scrim"></div>
+    <div class="recovery" role="alertdialog" aria-modal="true" aria-labelledby="recovery-title" aria-describedby="recovery-copy">
+      <h2 id="recovery-title">Resume your last review?</h2>
+      <p id="recovery-copy">A review was still open when Marginalia last closed. Resume picks up your edits and rationales where you left them.</p>
+      <dl>
+        <dt>File</dt>
+        <dd>{recoveryCandidate.filePath || 'Unknown file'}</dd>
+        <dt>Last saved</dt>
+        <dd>{recoveryCandidate.updatedAt ? new Date(recoveryCandidate.updatedAt).toLocaleString() : 'Unknown'}</dd>
+      </dl>
+      <div class="recovery-actions">
+        <button type="button" class="btn btn-danger" onclick={discardRecoveredSession}>Discard</button>
+        <button type="button" class="btn btn-primary" onclick={resumeRecoveredSession}>Resume</button>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <style>
-  .web-fallback {
-    height: 100vh;
-    width: 100%;
-    display: grid;
-    place-items: center;
-    padding: 2rem;
-    background: var(--paper);
-    color: var(--ink);
-  }
-
-  .web-fallback-inner {
-    max-width: 34rem;
-    border-radius: 14px;
-    border: 1px solid var(--paper-edge);
-    padding: 1.25rem 1.25rem;
-  }
-
-  .web-fallback-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.3rem 0.6rem;
-    border-radius: 999px;
-    border: 1px solid var(--paper-edge);
-    background: color-mix(in srgb, var(--paper-bright) 65%, transparent);
-    font-size: 0.75rem;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--ink-faded);
-  }
-
-  .web-fallback-title {
-    margin-top: 0.85rem;
-    font-family: var(--font-display);
-    font-size: 1.6rem;
-    letter-spacing: -0.02em;
-  }
-
-  .web-fallback-copy {
-    margin-top: 0.65rem;
-    color: var(--ink-faded);
-    line-height: 1.5;
-  }
-
-  .web-fallback-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 1rem;
-  }
-
-  .web-fallback-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.5rem 0.75rem;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 80%, transparent);
-    background: color-mix(in srgb, var(--paper-bright) 70%, transparent);
-    color: var(--ink);
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-  }
-
-  .web-fallback-btn.secondary {
-    background: transparent;
-    color: var(--ink-faded);
-  }
-
-  .content-area {
-    display: flex;
-    flex: 1;
-    background: var(--window-body);
-    overflow: hidden;
-    min-height: 0;
-  }
-  .content-area.mode-manuscript :global(.rail),
-  .content-area.mode-manuscript :global(.rationale-panel) {
-    display: none;
-  }
-  .content-area.rationale-max :global(.manuscript-host) {
-    display: none;
-  }
-
   .app {
     display: flex;
     flex-direction: column;
-    background: var(--canvas-paper);
-    box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.04);
-    width: 100%;
+    height: 100vh;
+    min-height: 0;
+    background: var(--canvas);
+  }
+
+  .notice {
+    padding: var(--space-2) var(--space-5);
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--text-sm);
+    color: var(--ink-2);
+  }
+
+  .desk {
+    display: flex;
+    flex: 1;
     min-height: 0;
   }
 
-  .app.density-manuscript {
-    --line-height: 1.875rem;
+  .editor-column {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
   }
 
-  .app.density-review {
-    --line-height: 1.75rem;
-    --glass-bg-static: color-mix(in srgb, var(--paper) 95%, transparent);
-  }
-
-  .recovery-overlay {
+  .scrim {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--paper) 70%, rgba(0, 0, 0, 0.25));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    z-index: 200;
+    background: var(--scrim);
+    z-index: 30;
   }
 
-  .recovery-modal {
-    width: min(620px, 100%);
-    border: var(--border-subtle);
-    border-radius: var(--radius-lg);
+  .reference-drawer {
+    position: fixed;
+    top: var(--topbar-h);
+    right: 0;
+    bottom: var(--bottombar-h);
+    width: min(480px, 44vw);
+    background: var(--surface);
+    border-left: 1px solid var(--rule);
+    box-shadow: var(--shadow-pop);
+    z-index: 31;
+    animation: slide-in var(--dur) var(--ease);
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateX(16px);
+      opacity: 0;
+    }
+  }
+
+  .recovery {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(460px, calc(100vw - 48px));
     padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    box-shadow: var(--shadow-lg);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow-pop);
+    z-index: 31;
   }
 
-  .recovery-modal h2 {
-    font-family: var(--font-display);
-    font-size: 1.5rem;
-    color: var(--ink);
-    margin: 0;
+  .recovery h2 {
+    font-size: var(--text-md);
+    font-weight: 600;
   }
 
-  .recovery-copy {
-    font-family: var(--font-body);
-    color: var(--ink-faded);
-    line-height: 1.5;
+  .recovery p {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--ink-2);
   }
 
-  .recovery-meta {
+  .recovery dl {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-2);
-    margin: 0;
-    padding: var(--space-3);
-    border: var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--paper-bright) 72%, transparent);
+    grid-template-columns: auto 1fr;
+    gap: var(--space-1) var(--space-4);
+    margin-top: var(--space-4);
+    font-size: var(--text-sm);
   }
 
-  .recovery-meta div {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .recovery dt {
+    color: var(--ink-3);
   }
 
-  .recovery-meta dt {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-  }
-
-  .recovery-meta dd {
-    margin: 0;
-    font-family: var(--font-body);
+  .recovery dd {
     color: var(--ink);
-    font-size: 0.95rem;
-    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .recovery-actions {
     display: flex;
     justify-content: flex-end;
     gap: var(--space-2);
-    margin-top: var(--space-1);
+    margin-top: var(--space-6);
   }
 
-  .discard-btn,
-  .resume-btn {
-    border-radius: var(--radius-md);
-    padding: var(--space-2) var(--space-4);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    font-weight: 500;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  }
-
-  .discard-btn {
-    background: transparent;
-    color: var(--ink-faded);
-    border-color: var(--paper-edge);
-  }
-
-  .discard-btn:hover {
-    color: var(--ink);
-    border-color: var(--ink-ghost);
-  }
-
-  .resume-btn {
-    color: var(--paper-bright);
-    background: var(--accent);
-  }
-
-  .resume-btn:hover {
-    background: var(--accent-hover);
-  }
-
-  .degraded-banner {
-    border-bottom: 1px solid color-mix(in srgb, var(--slop-line) 30%, transparent);
-    background: color-mix(in srgb, var(--slop-bg) 78%, transparent);
-    color: color-mix(in srgb, var(--slop-ink) 80%, var(--ink));
-    padding: var(--space-2) var(--desk-padding-x);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    line-height: 1.4;
-  }
-
-  .desk {
-    flex: 1 1 auto;
-    min-height: 0;
+  .web-fallback {
     display: grid;
-    grid-template-columns: var(--desk-rail-width) minmax(0, 1fr) var(--desk-right-width);
-    gap: var(--desk-gap);
-    padding: var(--space-10) var(--desk-padding-x) var(--space-4);
-    overflow: hidden;
+    place-items: center;
+    min-height: 100vh;
+    padding: var(--space-6);
   }
 
-  .app.density-review .desk {
-    padding-top: var(--space-8);
+  .web-fallback-inner {
+    max-width: 30rem;
   }
 
-  .desk.compact {
-    grid-template-columns: var(--desk-rail-width) minmax(0, 1fr);
+  .web-fallback h1 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
 
-  .editor-column {
-    min-width: 0;
-    overflow: hidden;
+  .web-fallback p {
+    margin-top: var(--space-2);
+    color: var(--ink-2);
+  }
+
+  .web-fallback-actions {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .editor-column > :global(*) {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .right-pane-shell {
-    width: var(--desk-right-width);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .reference-drawer-scrim {
-    position: fixed;
-    inset: 0;
-    background: rgba(25, 20, 15, 0.18);
-    z-index: 140;
-  }
-
-  .reference-drawer {
-    position: fixed;
-    top: var(--header-height);
-    right: var(--desk-padding-x);
-    bottom: calc(var(--status-bar-height) + var(--space-3));
-    width: min(24rem, calc(100vw - 2rem));
-    z-index: 150;
-  }
-
-  .reference-drawer :global(.reference-pane) {
-    width: 100%;
-    height: 100%;
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    box-shadow: var(--shadow-lg);
-  }
-
-  @media (max-width: 1180px) {
-    .desk {
-      gap: var(--space-7);
-    }
-  }
-
-  @media (max-width: 1100px) {
-    .desk,
-    .app.density-review .desk {
-      padding-top: var(--space-7);
-      padding-left: var(--space-4);
-      padding-right: var(--space-4);
-    }
-  }
-
-  @media (max-width: 920px) {
-    .recovery-modal {
-      padding: var(--space-4);
-    }
-
-    .recovery-actions {
-      flex-direction: column-reverse;
-      align-items: stretch;
-    }
-
-    .discard-btn,
-    .resume-btn {
-      width: 100%;
-    }
+    gap: var(--space-2);
+    margin-top: var(--space-5);
   }
 </style>

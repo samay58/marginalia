@@ -8,18 +8,6 @@
     <script>
       (function () {
         try {
-          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (prefersDark) {
-            document.documentElement.classList.add('dark');
-          }
-        } catch (_) {
-          // no-op: fall back to default light theme
-        }
-      })();
-    </script>
-    <script>
-      (function () {
-        try {
           var path = window.location.pathname || '/';
           var isReview = path === '/review' || path.indexOf('/review/') === 0;
           document.documentElement.dataset.marginaliaMode = isReview ? 'review' : 'site';

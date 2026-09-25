@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { computeDiff, getLinesWithChanges, summarizeChanges } from '../utils/diff.js';
+import { computeDiff } from '../utils/diff.js';
 import {
   createAnnotationId,
   isVisibleChange,
@@ -11,7 +11,6 @@ import {
 import { createDiffSnapshot } from '../utils/diff-render-state.js';
 import {
   createChangeGroups,
-  createGlobalReviewTarget,
   createRationaleDraft,
   createReviewTargetFromChange,
   createReviewTargetFromGroup,
@@ -239,18 +238,6 @@ export const substantiveChangeGroups = derived(changeGroups, ($groups) => {
   );
 });
 
-/** Lines that have changes */
-export const linesWithChanges = derived(visibleChanges, ($changes) => {
-  if (!$changes) return new Set();
-  return getLinesWithChanges($changes);
-});
-
-/** Summary text */
-export const changeSummary = derived(diffResult, ($diff) => {
-  if (!$diff) return 'No changes';
-  return summarizeChanges($diff);
-});
-
 /** Selected change object */
 export const selectedChange = derived(
   [visibleChanges, selectedChangeId],
@@ -327,78 +314,6 @@ export const selectedAnnotation = derived(
       ) || null
     );
   }
-);
-
-export const reviewSession = derived(
-  [
-    filename,
-    filePath,
-    originalContent,
-    editedContent,
-    originalPlainText,
-    editedPlainText,
-    diffResult,
-    reviewTargets,
-    annotations,
-    rationaleDrafts,
-    selectedChangeId,
-    selectedTargetId,
-    generalNotes,
-    reviewStatus,
-    documentEpoch,
-    diffEpoch,
-    renderEpoch,
-    diffStatus,
-  ],
-  ([
-    $filename,
-    $filePath,
-    $originalContent,
-    $editedContent,
-    $originalPlainText,
-    $editedPlainText,
-    $diffResult,
-    $reviewTargets,
-    $annotations,
-    $rationaleDrafts,
-    $selectedChangeId,
-    $selectedTargetId,
-    $generalNotes,
-    $reviewStatus,
-    $documentEpoch,
-    $diffEpoch,
-    $renderEpoch,
-    $diffStatus,
-  ]) => ({
-    sessionId: '',
-    status: $reviewStatus,
-    documentEpoch: $documentEpoch,
-    diffEpoch: $diffEpoch,
-    renderEpoch: $renderEpoch,
-    file: { path: $filePath, filename: $filename },
-    original: {
-      markdown: $originalContent,
-      plainText: $originalPlainText,
-    },
-    current: {
-      markdown: $editedContent,
-      plainText: $editedPlainText,
-    },
-    diff: {
-      status: $diffStatus,
-      snapshot: $diffResult,
-      previousStableSnapshot: previousDiffSnapshot,
-    },
-    reviewTargets: Object.fromEntries(($reviewTargets || []).map((target) => [target.id, target])),
-    annotations: Object.fromEntries(($annotations || []).map((annotation) => [annotation.id, annotation])),
-    rationaleDrafts: $rationaleDrafts,
-    selection: {
-      selectedTargetId: $selectedTargetId,
-      selectedChangeId: $selectedChangeId,
-      selectedAnnotationId: null,
-    },
-    generalNotes: $generalNotes,
-  })
 );
 
 // Actions
@@ -681,21 +596,6 @@ export function ensureTargetForChange(change) {
 }
 
 /**
- * @param {string} note
- * @returns {any}
- */
-export function ensureGlobalTarget(note) {
-  const existing = get(resolvedReviewTargets).find((target) => target.kind === 'global') || null;
-  if (existing) return existing;
-  const target = createGlobalReviewTarget({
-    note,
-    documentEpoch: get(documentEpoch),
-  });
-  upsertReviewTarget(target);
-  return target;
-}
-
-/**
  * @param {string | null} targetId
  */
 export function setSelectedTarget(targetId) {
@@ -753,10 +653,6 @@ export function discardRationaleDraft(draftId) {
   });
 }
 
-export function markRenderCommitted() {
-  renderEpoch.update((epoch) => epoch + 1);
-}
-
 /**
  * @param {'loading' | 'reviewing' | 'finalizing' | 'degraded'} status
  */
@@ -785,32 +681,3 @@ export function clearSelectedChange() {
   selectedTargetId.set(null);
 }
 
-/**
- * Reset the store to initial state
- */
-export function reset() {
-  previousDiffSnapshot = null;
-  previousOriginalForSnapshot = '';
-  nextDiffEpoch = 0;
-  filename.set('Untitled');
-  filePath.set('');
-  originalContent.set('');
-  editedContent.set('');
-  originalPlainText.set('');
-  editedPlainText.set('');
-  debouncedEditedPlainText.set('');
-  if (debounceTimer) clearTimeout(debounceTimer);
-  annotations.set([]);
-  reviewTargets.set([]);
-  rationaleDrafts.set({});
-  generalNotes.set('');
-  startTime.set(new Date());
-  reviewStatus.set('loading');
-  documentEpoch.set(0);
-  diffEpoch.set(0);
-  renderEpoch.set(0);
-  diffStatus.set('clean');
-  selectedChangeId.set(null);
-  selectedTargetId.set(null);
-  currentLine.set(1);
-}
