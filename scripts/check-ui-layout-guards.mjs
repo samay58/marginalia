@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const editor = readFileSync('src/lib/components/Editor.svelte', 'utf8');
 const drawer = readFileSync('src/lib/components/SessionDrawer.svelte', 'utf8');
-const status = readFileSync('src/lib/components/StatusBar.svelte', 'utf8');
+const footer = readFileSync('src/lib/components/chrome/BottomShortcutBar.svelte', 'utf8');
 
 function assertContains(source, needle, message) {
   assert.ok(source.includes(needle), message || `expected ${needle}`);
@@ -31,8 +31,9 @@ function testSessionDrawerResizesWithViewport() {
 }
 
 function testFooterStaysReadable() {
-  assertContains(status, 'flex: 0 0 var(--status-bar-height);', 'footer needs a fixed flex row');
-  assertContains(status, 'font-size: 0.72rem;', 'footer text should remain readable after compaction');
+  assertContains(footer, 'height: var(--bottombar-h);', 'footer needs a fixed-height row');
+  assertContains(footer, 'flex-shrink: 0;', 'footer must not collapse when the window is short');
+  assertContains(footer, 'font-size: 12px;', 'footer counts should remain readable');
 }
 
 function main() {

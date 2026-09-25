@@ -49,8 +49,10 @@ Each `check:*` script is a standalone regression test in `scripts/`. `pnpm run c
 - **Desktop shell**: Tauri 2 (Rust). The Rust layer is intentionally thin: file I/O, bundle persistence, CLI arg parsing, window lifecycle. All review logic lives in the frontend.
 - **Editor**: Milkdown (ProseMirror-based markdown editor)
 - **Diffing**: `diff-match-patch` on rendered plain text, not raw markdown
-- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`
+- **Layout tuning**: `dialkit` provides live-tunable CSS custom properties via `DialStore`, gated behind a Preferences toggle + `VITE_DIALKIT=1` (hidden by default)
 - **Animations**: `motion` (Framer Motion for JS)
+- **Theme**: v2 clunky old-school chrome. Tokens in `src/lib/theme/tokens.css`, bevel + utility classes in `src/lib/theme/chrome.css`. Full spec in `docs/design/DESIGN_REFERENCE.md`.
+- **Fonts**: EB Garamond (wordmark + italic empty states), Old Standard TT (manuscript headings), IM Fell English (manuscript body), IBM Plex Sans (chrome UI), IBM Plex Mono (keycaps + counters). Bundled locally via `@fontsource/*` imports in `src/routes/+layout.svelte`, so the app renders the same offline.
 
 ## Architecture
 
@@ -78,16 +80,21 @@ The root layout (`+layout.svelte`) sets `data-marginalia-mode` to `review` or `s
 - `src/routes/review/+page.svelte`: app orchestration, recovery, keyboard shortcuts, selection/composer state, bundle finalization
 - `src/lib/stores/review-session.js`: document state, epochs, target state, rationale drafts, debounced diff chain, trivial/substantive change split
 - `src/lib/stores/app.js`: compatibility facade for existing imports
+- `src/lib/stores/review-ui.js`: ephemeral tab mode and rationale panel state (open, minimized, maximized, closed)
+- `src/lib/stores/preferences.js`: persisted preferences (localStorage); currently gates the DialKit tuning handle
 - `src/lib/utils/diff.js`: stable text diff with ID retention across edits
 - `src/lib/utils/review-targets.js`: durable review targets, change groups, target resolution, rationale drafts
 - `src/lib/utils/annotations.js`: annotation records, target metadata, reattachment scoring, stale resolution
 - `src/lib/utils/diff-render-state.js`: diff snapshot hashes and render update decisions
-- `src/lib/utils/bundle.js`: bundle generation (format `3.0`)
+- `src/lib/utils/bundle.js`: bundle generation (format `3.1`)
 - `src/lib/components/Editor.svelte`: Milkdown host, persistent note markers from resolved annotations
-- `src/lib/components/ChangeRail.svelte`: left-side change index. Substantive changes shown with type icons; trivial edits collapsed at the bottom.
-- `src/lib/components/AnnotationColumn.svelte`: desktop rationale workflow (headerless, minimal chrome)
+- `src/lib/components/ChangeRail.svelte`: left-side change index over change groups. Substantive groups shown with type icons; trivial edits collapsed at the bottom.
+- `src/lib/components/AnnotationColumn.svelte`: desktop rationale workflow, framed as a beveled sub-window (min/max/close, sunken body well). Flex sibling, not an overlay.
+- `src/lib/components/AnnotationEditor.svelte`: rationale compose UI (excerpt preview, textarea, Remove / Cancel / Save)
 - `src/lib/components/AnnotationPopover.svelte`: compact-layout rationale UI
+- `src/lib/components/chrome/`: v2 chrome primitives (`WindowFrame`, `TitleBar`, `TrafficLight`, `AppHeader`, `TabStrip`, `BottomShortcutBar`, `Keycap`, `BeveledButton`, `StatusLED`, `SunkenWell`, `HelpModal`, `PreferencesPanel`)
 - `src-tauri/src/lib.rs`: native file/bundle I/O, CLI parsing, window commands
+- `src-tauri/.cargo/config.toml`: forces Apple's `/usr/bin/cc` as the Rust linker, bypassing the Playbit toolchain's `ld64.lld`, which can't resolve the macOS SDK
 
 ### Annotation model
 
@@ -120,7 +127,7 @@ Slop/lint matching (tone violations, WRITING.md ban patterns, the `linesWithSlop
 
 - Diffs are computed from rendered plain text, not raw markdown.
 - Whitespace-only changes are filtered from the visible review surface.
-- Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets remain click-intercepted.
+- Clicking inserted text in the manuscript must behave like normal editing. Only deletion widgets and `⌥-click` on insertions are click-intercepted; bare clicks on insertions place the cursor normally. The rail is the primary selection path for insertions; `⌥-click` is the discoverability affordance.
 - Selecting an edit must not focus or reopen the rationale composer.
 - Saved manuscript markers are keyed by stable annotation IDs and grouped by block, not mutable geometry buckets.
 

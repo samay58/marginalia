@@ -1,210 +1,10 @@
 /* =============================================================================
-   MARGINALIA DESIGN TOKENS
-   Paper & Ink aesthetic - manuscript markup on quality paper
+   MARGINALIA V2 REVIEW SURFACE — GLOBAL STYLES
+   All tokens live in ./lib/theme/tokens.css. Chrome utilities in ./lib/theme/chrome.css.
    ============================================================================= */
 
-:root {
-  /* -------------------------------------------------------------------------
-     PAPER - Warm, off-white. Not sterile.
-     ------------------------------------------------------------------------- */
-  --canvas-paper: #F7F3EE;
-  --paper: #F7F3EE;
-  --paper-matte: #F2ECE4;
-  --paper-bright: #FFFFFF;
-  --paper-edge: #E5DDD2;
-  --chrome-veil: rgba(255, 255, 255, 0.45);
-  --chrome-border: rgba(255, 255, 255, 0.55);
-  --status-bg: rgba(255, 255, 255, 0.35);
-
-  /* -------------------------------------------------------------------------
-     INK - Deep, warm blacks. Not pure #000.
-     ------------------------------------------------------------------------- */
-  --ink: #2C2825;
-  --ink-faded: #6B6560;
-  --ink-ghost: #8C857B;
-  --ink-whisper: #C7C2B8;
-  --annotation-ink: #5C5549;
-  --annotation-muted: #9C958C;
-
-  /* -------------------------------------------------------------------------
-     REVISION MARKS
-     Struck = muted brick (old correction marks)
-     Added = deep verdigris (editorial insertions)
-     ------------------------------------------------------------------------- */
-  --delete-ink: #A0523D;
-  --delete-bg: rgba(160, 82, 61, 0.1);
-  --delete-line: rgba(160, 82, 61, 0.42);
-  --insert-ink: #3D7A68;
-  --insert-bg: rgba(61, 122, 104, 0.1);
-  --insert-line: rgba(61, 122, 104, 0.28);
-  --slop-ink: #D4A843;
-  --slop-bg: rgba(212, 168, 67, 0.1);
-  --slop-line: rgba(212, 168, 67, 0.42);
-  --struck-bg: var(--delete-bg);
-  --struck-text: var(--delete-ink);
-  --struck-line: var(--delete-line);
-  --added-bg: var(--insert-bg);
-  --added-text: var(--insert-ink);
-
-  /* -------------------------------------------------------------------------
-     ACCENT - Amber for indicators and actions
-     ------------------------------------------------------------------------- */
-  --accent: #C17F24;
-  --accent-subtle: rgba(193, 127, 36, 0.15);
-  --accent-hover: #D4922E;
-
-  /* -------------------------------------------------------------------------
-     TYPOGRAPHY
-     ------------------------------------------------------------------------- */
-  --font-ui: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: "Iowan Old Style", Palatino, Georgia, serif;
-  --font-body: "Charter", "Bitstream Charter", Cambria, serif;
-  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
-
-  /* -------------------------------------------------------------------------
-     SPACING (base: 4px)
-     ------------------------------------------------------------------------- */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-7: 1.75rem;
-  --space-8: 2rem;
-  --space-9: 2.25rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-
-  /* -------------------------------------------------------------------------
-     TYPE SCALE
-     ------------------------------------------------------------------------- */
-  --text-title: 1.875rem;
-  --text-heading: 1.375rem;
-  --text-body: 1rem;
-  --text-ui: 0.8125rem;
-  --text-ui-small: 0.75rem;
-  --text-status: 0.6875rem;
-  --text-annotation: 0.875rem;
-
-  /* -------------------------------------------------------------------------
-     EDITOR METRICS
-     ------------------------------------------------------------------------- */
-  --line-height: 1.6875rem;
-  --gutter-width: 3.5rem;
-  --content-max-width: 42rem;
-  --header-height: 52px;
-  --status-bar-height: 36px;
-  --desk-breakpoint-full: 1180px;
-  --desk-padding-x: 28px;
-  --desk-gap: 32px;
-  --desk-annotation-gap: 48px;
-  --desk-rail-width: 240px;
-  --desk-right-width: 304px;
-
-  /* -------------------------------------------------------------------------
-     BORDERS & RADII
-     ------------------------------------------------------------------------- */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --border-subtle: 1px solid var(--paper-edge);
-
-  /* -------------------------------------------------------------------------
-     SHADOWS
-     ------------------------------------------------------------------------- */
-  --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.06);
-  --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.08);
-  --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.12);
-  --shadow-note: 0 2px 12px rgba(0, 0, 0, 0.08);
-
-  /* -------------------------------------------------------------------------
-     GLASS
-     ------------------------------------------------------------------------- */
-  --glass-bg: var(--chrome-veil);
-  --glass-bg-static: rgba(247, 243, 238, 0.88);
-  --glass-border: var(--chrome-border);
-  --glass-blur-focal: 16px;
-  --glass-blur-ambient: 8px;
-
-  /* -------------------------------------------------------------------------
-     TRANSITIONS
-     ------------------------------------------------------------------------- */
-  --motion-ease-standard: cubic-bezier(0.22, 0, 0.18, 1);
-  --motion-ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-fast: 120ms;
-  --motion-normal: 200ms;
-  --motion-slow: 300ms;
-  --transition-fast: var(--motion-fast) var(--motion-ease-standard);
-  --transition-normal: var(--motion-normal) var(--motion-ease-standard);
-  --transition-slow: var(--motion-slow) var(--motion-ease-emphasis);
-
-  /* -------------------------------------------------------------------------
-     INTERACTION TOKENS
-     ------------------------------------------------------------------------- */
-  --focus-ring-color: color-mix(in srgb, var(--accent) 56%, transparent);
-  --focus-ring-base: 0 0 0 1px color-mix(in srgb, var(--paper-bright) 85%, transparent);
-  --focus-ring: var(--focus-ring-base), 0 0 0 3px var(--focus-ring-color);
-  --motion-press-shift: 1px;
-  --motion-hover-lift: -1px;
-}
-
-/* =============================================================================
-   DARK MODE
-   ============================================================================= */
-
-:root.dark {
-  --canvas-paper: #1B1815;
-  --paper: #1C1A18;
-  --paper-matte: #24201C;
-  --paper-bright: #2E2B28;
-  --paper-edge: #3D3935;
-  --chrome-veil: rgba(44, 38, 33, 0.68);
-  --chrome-border: rgba(255, 255, 255, 0.08);
-  --status-bg: rgba(44, 38, 33, 0.72);
-
-  --ink: #EBE8E4;
-  --ink-faded: #A8A29A;
-  --ink-ghost: #B4A796;
-  --ink-whisper: #4A463F;
-  --annotation-ink: #E3D6C8;
-  --annotation-muted: #B4A796;
-
-  --delete-ink: #D08B74;
-  --delete-bg: rgba(208, 139, 116, 0.14);
-  --delete-line: rgba(208, 139, 116, 0.46);
-  --insert-ink: #8FC1B1;
-  --insert-bg: rgba(143, 193, 177, 0.14);
-  --insert-line: rgba(143, 193, 177, 0.32);
-  --slop-ink: #E0B85F;
-  --slop-bg: rgba(224, 184, 95, 0.14);
-  --slop-line: rgba(224, 184, 95, 0.46);
-  --struck-bg: var(--delete-bg);
-  --struck-text: var(--delete-ink);
-  --struck-line: var(--delete-line);
-  --added-bg: var(--insert-bg);
-  --added-text: var(--insert-ink);
-
-  --accent: #DBA044;
-  --accent-subtle: rgba(219, 160, 68, 0.15);
-  --accent-hover: #E8B054;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
-  --shadow-note: 0 2px 12px rgba(0, 0, 0, 0.24);
-
-  --glass-bg: var(--chrome-veil);
-  --glass-bg-static: rgba(28, 26, 24, 0.88);
-  --glass-border: var(--chrome-border);
-  --glass-blur-focal: 14px;
-  --glass-blur-ambient: 7px;
-}
-
-/* =============================================================================
-   BASE RESET & GLOBAL STYLES
-   ============================================================================= */
+@import './lib/theme/tokens.css';
+@import './lib/theme/chrome.css';
 
 *,
 *::before,
@@ -221,113 +21,25 @@ html {
   text-rendering: optimizeLegibility;
 }
 
-:root[data-marginalia-mode='review'] body {
-  font-family: var(--font-ui);
-  font-size: var(--text-body);
-  line-height: 1.5;
+body {
+  font-family: var(--font-chrome);
   color: var(--ink);
-  background-color: var(--canvas-paper);
+  background: var(--desktop-ground);
   overflow: hidden;
 }
 
-.glass-surface {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  box-shadow: var(--shadow-sm);
+:root[data-marginalia-mode='review'] body {
+  background: var(--desktop-ground);
 }
 
-.glass-surface-focal {
-  backdrop-filter: blur(var(--glass-blur-focal));
-  -webkit-backdrop-filter: blur(var(--glass-blur-focal));
+:root[data-marginalia-mode='site'] body {
+  background: var(--window-body);
 }
 
-.glass-surface-ambient {
-  backdrop-filter: blur(var(--glass-blur-ambient));
-  -webkit-backdrop-filter: blur(var(--glass-blur-ambient));
-}
-
-.glass-surface-static {
-  background: var(--glass-bg-static);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* Prevent text selection in UI elements */
 .no-select {
   user-select: none;
   -webkit-user-select: none;
 }
-
-/* Shared interaction language */
-.control-motion {
-  transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.control-motion:disabled {
-  transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.control-raise:hover:not(:disabled) {
-  transform: translateY(var(--motion-hover-lift));
-}
-
-.control-motion:active:not(:disabled) {
-  transform: translateY(var(--motion-press-shift));
-}
-
-.control-focus:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .control-motion,
-  .control-motion:disabled {
-    transition: none;
-  }
-
-  .control-raise:hover:not(:disabled),
-  .control-motion:active:not(:disabled) {
-    transform: none;
-  }
-}
-
-/* =============================================================================
-   SCROLLBAR STYLING
-   ============================================================================= */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--ink-whisper);
-  border-radius: var(--radius-lg);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-ghost);
-}
-
-/* =============================================================================
-   UTILITY CLASSES
-   ============================================================================= */
 
 .visually-hidden {
   position: absolute;

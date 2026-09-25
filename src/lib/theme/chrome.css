@@ -1,0 +1,84 @@
+/* =============================================================================
+   MARGINALIA V2 CHROME UTILITIES
+   Bevel helpers, typographic base, scrollbars. Layer-ordered AFTER tokens.css.
+   ============================================================================= */
+
+.raised-1 {
+  box-shadow: var(--bevel-raised-1);
+}
+
+.sunken-1 {
+  box-shadow: var(--bevel-sunken-1);
+}
+
+.window-2 {
+  box-shadow: var(--bevel-window-2);
+}
+
+.chip-raised {
+  box-shadow: var(--bevel-raised-chip);
+}
+
+/* Draggable title-bar region. Buttons inside must opt out. */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.drag-region > button,
+.drag-region > a,
+.drag-region > [data-tauri-drag-region='false'] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Manuscript document typography — applied inside Editor via a class root. */
+.v2-manuscript {
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--ink);
+}
+
+.v2-manuscript h1,
+.v2-manuscript h2,
+.v2-manuscript h3 {
+  font-family: var(--font-h);
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+
+.v2-manuscript h1 {
+  font-size: 38px;
+  line-height: 46px;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+}
+
+.v2-manuscript h2 {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  margin: 0 0 14px 0;
+}
+
+.v2-manuscript p {
+  margin: 0 0 28px 0;
+}
+
+/* Scrollbars — narrow, neutral, period-appropriate (no rounded thumb). */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--button-face);
+  box-shadow: var(--bevel-sunken-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--button-face);
+  box-shadow: var(--bevel-raised-1);
+  border: 1px solid var(--navy-shadow);
+}

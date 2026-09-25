@@ -3,14 +3,19 @@
   import { invoke } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
-  import Header from '$lib/components/Header.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import ChangeRail from '$lib/components/ChangeRail.svelte';
   import AnnotationColumn from '$lib/components/AnnotationColumn.svelte';
   import AnnotationPopover from '$lib/components/AnnotationPopover.svelte';
   import ReferencePane from '$lib/components/ReferencePane.svelte';
   import SessionDrawer from '$lib/components/SessionDrawer.svelte';
-  import StatusBar from '$lib/components/StatusBar.svelte';
+  import WindowFrame from '$lib/components/chrome/WindowFrame.svelte';
+  import TitleBar from '$lib/components/chrome/TitleBar.svelte';
+  import AppHeader from '$lib/components/chrome/AppHeader.svelte';
+  import TabStrip from '$lib/components/chrome/TabStrip.svelte';
+  import BottomShortcutBar from '$lib/components/chrome/BottomShortcutBar.svelte';
+  import HelpModal from '$lib/components/chrome/HelpModal.svelte';
+  import PreferencesPanel from '$lib/components/chrome/PreferencesPanel.svelte';
   import { createWritingRuleMatcher } from '$lib/utils/writing-rules.js';
   import {
     filename,
@@ -63,11 +68,20 @@
     setSelectedChange,
     clearSelectedChange,
   } from '$lib/stores/app.js';
+  import {
+    tabMode,
+    rationaleState,
+    toggleRationaleClosed,
+    toggleRationaleMinimized,
+    toggleRationaleMaximized,
+  } from '$lib/stores/review-ui.js';
   import { generateBundle } from '$lib/utils/bundle.js';
   import { createAnnotationRecord, reanchorAnnotation } from '$lib/utils/annotations.js';
   import { computeDiff } from '$lib/utils/diff.js';
   import { computeSemanticChanges } from '$lib/utils/semantic-diff.js';
   import { DialStore } from 'dialkit/store';
+  import { get } from 'svelte/store';
+  import { preferences } from '$lib/stores/preferences.js';
 
   // DialKit: live-tunable desk layout parameters
   const DESK_PANEL_ID = 'review-desk';
@@ -135,6 +149,18 @@
   let cliInitialPath = $state('');
   /** @type {'review' | 'manuscript'} */
   let densityMode = $state('manuscript');
+
+  const showRail = $derived($tabMode === 'review');
+  const showRationale = $derived($tabMode === 'review' && $rationaleState !== 'closed');
+  const rationaleMinimized = $derived($rationaleState === 'minimized');
+  const rationaleMaximized = $derived($rationaleState === 'maximized');
+  const breadcrumb = [
+    { label: 'All drafts' },
+    { label: 'Product Brief' },
+    { label: 'Draft Review', active: true }
+  ];
+  let helpOpen = $state(false);
+  let preferencesOpen = $state(false);
   /** @type {null | ((rationale: string) => string | null)} */
   let writingRuleMatcher = $state(null);
   /** @type {null | (() => void)} */
@@ -147,6 +173,30 @@
   let snapshotPath = $state('');
   let activeSessionStatePath = $state('');
   let autosaveState = $state('idle');
+  /** Wall-clock timestamp in ms when the last save completed; drives the
+   *  sticky-green LED for STICKY_SAVED_MS afterward. */
+  let lastSavedAt = $state(0);
+  const STICKY_SAVED_MS = 2000;
+  let savedTick = $state(0);
+  $effect(() => {
+    // Keep the LED green for STICKY_SAVED_MS after lastSavedAt, then tick to
+    // revert. Reads lastSavedAt as a dep so it resets on every save.
+    if (!lastSavedAt) return;
+    const elapsed = Date.now() - lastSavedAt;
+    const remaining = STICKY_SAVED_MS - elapsed;
+    if (remaining <= 0) return;
+    const id = setTimeout(() => { savedTick++; }, remaining + 20);
+    return () => clearTimeout(id);
+  });
+  // The LED lights briefly after each autosave; the label stays truthful the whole time.
+  const saveFresh = $derived.by(() => {
+    savedTick; // dependency only, no read value
+    if (autosaveState !== 'saved' || !lastSavedAt) return false;
+    return Date.now() - lastSavedAt < STICKY_SAVED_MS;
+  });
+  const saveLabel = $derived(
+    autosaveState === 'saving' ? 'SAVING' : autosaveState === 'error' ? 'NOT SAVED' : 'SAVED'
+  );
   let isHydratingSnapshot = $state(false);
   let hasInitialDocument = $state(false);
   let degradedMode = $state(false);
@@ -173,7 +223,6 @@
   const DENSITY_STORAGE_KEY = 'marginalia.density';
 
   const editCount = $derived.by(() => $visibleChanges?.length ?? 0);
-  const statusAutosaveLabel = $derived.by(() => getAutosaveLabel());
   const selectedAnnotationEntry = $derived.by(() => {
     if (selectedAnnotationId) {
       return $annotationEntries.find((entry) => entry.annotation.id === selectedAnnotationId) || null;
@@ -382,6 +431,7 @@
       });
       await writeActiveSessionState(true, 'autosave');
       autosaveState = 'saved';
+      lastSavedAt = Date.now();
     } catch (e) {
       autosaveState = 'error';
       console.error('Autosave failed:', e);
@@ -512,15 +562,23 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   Avoid hedging. No filler. Say what we mean and quantify the miss.`;
 
   onMount(() => {
-    // DialKit: register panel and subscribe for live CSS updates
-    DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
-    applyDeskValues();
-    const unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
+    // DialKit: register panel and subscribe only when the live-tuning handle is enabled
+    const dialkitEnabled =
+      import.meta.env.VITE_DIALKIT === '1' || get(preferences).showDialkitHandle;
+    /** @type {null | (() => void)} */
+    let unsubDesk = null;
+    if (dialkitEnabled) {
+      DialStore.registerPanel(DESK_PANEL_ID, 'Review Desk', DESK_CONFIG);
+      applyDeskValues();
+      unsubDesk = DialStore.subscribe(DESK_PANEL_ID, applyDeskValues);
+    }
 
     if (!tauriAvailable) {
       return () => {
-        unsubDesk();
-        DialStore.unregisterPanel(DESK_PANEL_ID);
+        if (dialkitEnabled) {
+          if (unsubDesk) unsubDesk();
+          DialStore.unregisterPanel(DESK_PANEL_ID);
+        }
       };
     }
 
@@ -627,8 +685,10 @@ Open a lightweight review surface directly from the CLI session, capture edits +
 
     return () => {
       cleanup();
-      unsubDesk();
-      DialStore.unregisterPanel(DESK_PANEL_ID);
+      if (dialkitEnabled) {
+        if (unsubDesk) unsubDesk();
+        DialStore.unregisterPanel(DESK_PANEL_ID);
+      }
     };
   });
 
@@ -1127,6 +1187,11 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       event.preventDefault();
       handleAnnotationShortcut();
     }
+    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      toggleRationaleClosed();
+      return;
+    }
     if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'o') {
       event.preventDefault();
       toggleReferenceSurface();
@@ -1582,14 +1647,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     clearPopoverState();
   }
 
-  function getAutosaveLabel() {
-    if (!sessionId) return '';
-    if (autosaveState === 'saving') return 'Saving...';
-    if (autosaveState === 'saved') return 'Saved';
-    if (autosaveState === 'error') return 'Autosave error';
-    return 'Autosave idle';
-  }
-
   function restoreDensityMode() {
     try {
       const saved = localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -1640,16 +1697,26 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     </div>
   </div>
 {:else}
-<div class="app" class:density-review={densityMode === 'review'} class:density-manuscript={densityMode === 'manuscript'}>
-  <Header
-    filename={$filename}
-    hasChanges={$hasChanges}
-    editCount={editCount}
-    {densityMode}
-    onSetDensity={setDensityMode}
-    onDone={handleDone}
+<WindowFrame>
+  <TitleBar title="Marginalia — Draft Review" />
+  <AppHeader
+    {breadcrumb}
+    onHelp={() => (helpOpen = true)}
+    onPreferences={() => (preferencesOpen = true)}
+  />
+  <TabStrip
+    tabs={[{ id: 'review', label: 'Review' }, { id: 'manuscript', label: 'Manuscript' }]}
+    activeId={$tabMode}
+    onSelect={(id) => tabMode.set(/** @type {'review' | 'manuscript'} */ (id))}
   />
 
+  <div
+    class="content-area app"
+    class:density-review={densityMode === 'review'}
+    class:density-manuscript={densityMode === 'manuscript'}
+    class:mode-manuscript={$tabMode === 'manuscript'}
+    class:rationale-max={rationaleMaximized}
+  >
   {#if recoveryCandidate}
     <div class="recovery-overlay">
       <div class="recovery-modal glass-surface glass-surface-focal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
@@ -1682,23 +1749,25 @@ Open a lightweight review surface directly from the CLI session, capture edits +
   {/if}
 
   <main class="desk" class:compact={compactLayout}>
-    <ChangeRail
-      changes={$substantiveChanges}
-      groups={$substantiveChangeGroups.map((group) => ({
-        ...group,
-        targetId: targetIdForGroup(group),
-      }))}
-      trivialChanges={$trivialChanges}
-      trivialCount={$trivialChangeCount}
-      annotationChangeIds={$annotatedChangeIds}
-      annotationTargetIds={$annotatedTargetIds}
-      annotationCount={$annotationEntries.length}
-      selectedChangeId={$selectedChangeId}
-      selectedTargetId={$selectedTargetId}
-      currentLine={$currentLine}
-      onSelectChange={handleRailChangeSelect}
-      onSelectGroup={handleRailGroupSelect}
-    />
+    {#if showRail}
+      <ChangeRail
+        changes={$substantiveChanges}
+        groups={$substantiveChangeGroups.map((group) => ({
+          ...group,
+          targetId: targetIdForGroup(group),
+        }))}
+        trivialChanges={$trivialChanges}
+        trivialCount={$trivialChangeCount}
+        annotationChangeIds={$annotatedChangeIds}
+        annotationTargetIds={$annotatedTargetIds}
+        annotationCount={$annotationEntries.length}
+        selectedChangeId={$selectedChangeId}
+        selectedTargetId={$selectedTargetId}
+        currentLine={$currentLine}
+        onSelectChange={handleRailChangeSelect}
+        onSelectGroup={handleRailGroupSelect}
+      />
+    {/if}
 
     <div class="editor-column">
       <Editor
@@ -1720,10 +1789,15 @@ Open a lightweight review surface directly from the CLI session, capture edits +
       />
     </div>
 
-    {#if !compactLayout}
+    {#if showRationale && !compactLayout}
       <section class="right-pane-shell">
         <AnnotationColumn
           bind:this={annotationColumnRef}
+          minimized={rationaleMinimized}
+          maximized={rationaleMaximized}
+          onMinimize={toggleRationaleMinimized}
+          onMaximize={toggleRationaleMaximized}
+          onClose={toggleRationaleClosed}
           selectedChange={$selectedChange}
           selectedAnnotationEntry={selectedAnnotationEntry}
           annotationEntries={$annotationEntries}
@@ -1768,19 +1842,6 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onNotesInput={handleNotesChange}
   />
 
-  <StatusBar
-    {editCount}
-    annotationCount={$annotationEntries.length}
-    autosaveLabel={statusAutosaveLabel}
-    diffStatus={$diffStatus}
-    {degradedMode}
-    drawerOpen={notesExpanded}
-    {compactLayout}
-    hasReferences={referenceFiles.length > 0}
-    onToggleDrawer={toggleSessionDrawer}
-    onToggleReference={toggleReferenceSurface}
-  />
-
   <AnnotationPopover
     changeId={popoverChangeId}
     text={popoverText}
@@ -1794,7 +1855,23 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     onRemove={handlePopoverRemove}
     onClose={handlePopoverClose}
   />
-</div>
+  </div>
+
+  <BottomShortcutBar
+    edits={editCount}
+    annotations={$annotationEntries.length}
+    {saveLabel}
+    {saveFresh}
+    saveFailed={autosaveState === 'error'}
+    onNotes={toggleSessionDrawer}
+    onRationale={handleAnnotationShortcut}
+    onAddRef={toggleReferenceSurface}
+    onUndo={() => { try { document.execCommand('undo'); } catch {} }}
+    onDone={handleDone}
+  />
+  <HelpModal open={helpOpen} onClose={() => (helpOpen = false)} />
+  <PreferencesPanel open={preferencesOpen} onClose={() => (preferencesOpen = false)} />
+</WindowFrame>
 {/if}
 
 <style>
@@ -1868,13 +1945,28 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     color: var(--ink-faded);
   }
 
+  .content-area {
+    display: flex;
+    flex: 1;
+    background: var(--window-body);
+    overflow: hidden;
+    min-height: 0;
+  }
+  .content-area.mode-manuscript :global(.rail),
+  .content-area.mode-manuscript :global(.rationale-panel) {
+    display: none;
+  }
+  .content-area.rationale-max :global(.manuscript-host) {
+    display: none;
+  }
+
   .app {
-    height: 100vh;
     display: flex;
     flex-direction: column;
-    min-height: 0;
     background: var(--canvas-paper);
     box-shadow: inset 0 0 200px 60px rgba(0, 0, 0, 0.04);
+    width: 100%;
+    min-height: 0;
   }
 
   .app.density-manuscript {
@@ -2023,7 +2115,13 @@ Open a lightweight review surface directly from the CLI session, capture edits +
     min-width: 0;
     overflow: hidden;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .editor-column > :global(*) {
+    width: 100%;
+    min-width: 0;
   }
 
   .right-pane-shell {

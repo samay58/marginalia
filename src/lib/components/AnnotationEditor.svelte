@@ -101,86 +101,120 @@
   .annotation-editor {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 12px;
   }
 
-  .annotation-excerpt,
-  .annotation-empty {
+  .annotation-excerpt {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--rationale-well-bg);
+    border: 1px solid var(--chrome-shadow);
+    box-shadow: var(--bevel-sunken-1);
     font-family: var(--font-body);
-    font-size: var(--text-ui-small);
-    line-height: 1.5;
+    font-size: 14px;
     font-style: italic;
-    color: var(--annotation-muted);
+    line-height: 20px;
+    color: var(--ink);
   }
 
   .annotation-empty {
-    color: var(--ink-ghost);
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
   }
 
   .annotation-input {
     width: 100%;
-    min-height: 7rem;
-    resize: vertical;
-    border: 1px solid color-mix(in srgb, var(--paper-edge) 90%, transparent);
-    border-radius: var(--radius-xl);
-    background: color-mix(in srgb, var(--paper-bright) 74%, transparent);
-    color: var(--annotation-ink);
-    padding: var(--space-3) var(--space-4);
+    min-height: 96px;
+    padding: 10px 12px;
+    background: var(--chrome-highlight);
+    border: 1px solid var(--chrome-shadow);
+    box-shadow: var(--bevel-sunken-1);
     font-family: var(--font-body);
-    font-size: 0.95rem;
-    line-height: 1.55;
+    font-size: 15px;
+    line-height: 22px;
+    color: var(--ink);
+    resize: vertical;
+    outline: none;
   }
 
   .annotation-input::placeholder {
-    color: var(--annotation-muted);
+    color: var(--muted);
+    font-style: italic;
   }
 
-  .annotation-actions,
-  .annotation-actions-right {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
+  .annotation-input:focus {
+    box-shadow:
+      var(--bevel-sunken-1),
+      inset 0 0 0 1px var(--link);
   }
 
   .annotation-actions {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 12px;
+  }
+
+  .annotation-actions-left,
+  .annotation-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .annotation-remove,
   .annotation-cancel,
   .annotation-save {
-    border-radius: 999px;
-    padding: 0.45rem 0.9rem;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    border: 1px solid transparent;
-    cursor: pointer;
-  }
-
-  .annotation-remove,
-  .annotation-cancel {
-    color: var(--ink-faded);
-    background: transparent;
-    border-color: color-mix(in srgb, var(--paper-edge) 90%, transparent);
-  }
-
-  .annotation-remove:hover,
-  .annotation-cancel:hover {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    height: 28px;
+    padding: 0 14px;
+    background: var(--button-face);
+    border: 1px solid var(--navy-shadow);
+    box-shadow: var(--bevel-raised-1);
+    font-family: var(--font-chrome);
+    font-size: 12px;
+    font-weight: 700;
     color: var(--ink);
-    border-color: color-mix(in srgb, var(--ink-ghost) 80%, transparent);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .annotation-remove:focus-visible,
+  .annotation-cancel:focus-visible,
+  .annotation-save:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
+  .annotation-remove:active,
+  .annotation-cancel:active,
+  .annotation-save:active {
+    box-shadow: var(--bevel-sunken-1);
   }
 
   .annotation-save {
-    color: var(--paper-bright);
-    background: var(--accent);
-  }
-
-  .annotation-save:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--chip-green-bg);
+    border-color: var(--chip-green-border);
+    color: var(--chip-green-text);
   }
 
   .annotation-save:disabled {
+    background: var(--button-face);
+    color: var(--muted);
     cursor: not-allowed;
-    opacity: 0.45;
+    box-shadow: var(--bevel-raised-1);
+    opacity: 0.7;
+  }
+
+  .annotation-remove {
+    background: var(--chip-red-bg);
+    border-color: var(--chip-red-border);
+    color: var(--chip-red-text);
   }
 </style>

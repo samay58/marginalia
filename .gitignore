@@ -16,3 +16,8 @@ analysis/
 CODEX-HANDOFF.md
 CLAUDE.md
 AGENTS.md
+
+# SpecStory + Superset session archives (per-session, ephemeral)
+.specstory/
+.superset/
+docs/learn/.specstory/

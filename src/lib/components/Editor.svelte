@@ -467,7 +467,7 @@
 </script>
 
 <div
-  class="editor-shell"
+  class="editor-shell manuscript-host v2-manuscript"
   class:density-review={densityMode === 'review'}
   class:density-manuscript={densityMode === 'manuscript'}
   bind:this={editorShell}
@@ -507,9 +507,50 @@
     padding-bottom: var(--space-12);
   }
 
+  .manuscript-host {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    background: var(--paper);
+    border-left: 1px solid var(--chrome-shadow);
+    box-shadow: inset 1px 0 0 var(--chrome-highlight);
+    padding: 40px 48px 60px 48px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  :global(.manuscript-host .milkdown),
+  :global(.manuscript-host .ProseMirror) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  :global(.v2-manuscript .ProseMirror) {
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 28px;
+    color: var(--ink);
+  }
+  :global(.v2-manuscript .ProseMirror h1) {
+    font-family: var(--font-h);
+    font-size: 38px;
+    line-height: 46px;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+  :global(.v2-manuscript .ProseMirror h2) {
+    font-family: var(--font-h);
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 700;
+    margin: 28px 0 14px 0;
+  }
+  :global(.v2-manuscript .ProseMirror p) {
+    margin-bottom: 28px;
+  }
+
   .editor-frame {
     position: relative;
-    width: min(100%, calc(var(--content-max-width) + var(--gutter-width) + 2rem));
     margin: 0 auto;
     padding-top: var(--space-12);
     padding-bottom: var(--space-12);
@@ -521,7 +562,6 @@
 
   .editor-surface {
     margin-left: var(--gutter-width);
-    max-width: var(--content-max-width);
     min-height: 100%;
   }
 

@@ -64,7 +64,7 @@
    * @returns {string}
    */
   function typeIcon(change) {
-    if (change.type === 'deletion') return '\u2212';
+    if (change.type === 'deletion') return '−';
     if (change.type === 'insertion') return '+';
     return '~';
   }
@@ -97,15 +97,7 @@
   function truncate(text, max) {
     const trimmed = text.trim();
     if (trimmed.length <= max) return trimmed;
-    return trimmed.slice(0, max) + '\u2026';
-  }
-
-  /**
-   * @param {Change} change
-   */
-  function isNearCursor(change) {
-    const line = typeof currentLine === 'number' ? currentLine : 1;
-    return Math.abs((change.location?.line ?? 1) - line) <= 1;
+    return trimmed.slice(0, max) + '…';
   }
 
   /** @param {any} group */
@@ -141,25 +133,20 @@
   }
 </script>
 
-<aside class="change-rail">
-  <header class="rail-header">
-    <div class="rail-heading">
-      <span class="rail-kicker">Changes</span>
-      <div class="rail-tallies">
-      <span>{sortedGroups.length} edits</span>
-        <span>{annotationCount} noted</span>
-      </div>
-    </div>
-    <div class="rail-counts" aria-label="Change counts">
-      <span class="count-pill insertion">+{insertionCount}</span>
-      <span class="count-pill deletion">&minus;{deletionCount}</span>
-    </div>
-  </header>
+<aside class="rail">
+  <div class="label">CHANGES</div>
+  <div class="summary">
+    <span>{sortedGroups.length} {sortedGroups.length === 1 ? 'edit' : 'edits'}</span>
+    <span class="muted">{annotationCount} noted</span>
+    <span class="chipRow" aria-label="Change counts">
+      <span class="chip added">+{insertionCount}</span>
+      <span class="chip removed">&minus;{deletionCount}</span>
+    </span>
+  </div>
+  <div class="divider"></div>
 
   {#if sortedGroups.length === 0 && trivialCount === 0}
-    <div class="empty-state">
-      <p>No edits yet. Start editing to populate the review index.</p>
-    </div>
+    <div class="empty">No edits yet. Start editing to populate the review index.</div>
   {:else}
     <ol class="change-list">
       {#each sortedGroups as group}
@@ -167,10 +154,10 @@
         {@const annotated = isGroupAnnotated(group)}
         {@const nearCursor = isGroupNearCursor(group)}
         {@const selected = (selectedTargetId && group.targetId === selectedTargetId) || group.changeIds?.includes(selectedChangeId)}
-        <li>
+        <li class="change-row">
           <button
             type="button"
-            class="change-item control-motion control-focus"
+            class="change-item"
             class:selected
             class:annotated
             class:near-cursor={nearCursor && !selected}
@@ -194,7 +181,7 @@
         <li class="trivial-row">
           <button
             type="button"
-            class="trivial-toggle control-motion control-focus"
+            class="trivial-toggle"
             onclick={() => trivialExpanded = !trivialExpanded}
           >
             {trivialExpanded ? 'Hide' : `${trivialCount} minor edit${trivialCount === 1 ? '' : 's'}`}
@@ -203,10 +190,10 @@
         {#if trivialExpanded}
           {#each sortedTrivial as change}
             {@const selected = selectedChangeId === change.id}
-            <li>
+            <li class="change-row">
               <button
                 type="button"
-                class="change-item trivial control-motion control-focus"
+                class="change-item trivial"
                 class:selected
                 aria-pressed={selected}
                 onclick={(event) => handleSelect(event, change)}
@@ -223,95 +210,94 @@
 </aside>
 
 <style>
-  .change-rail {
-    width: var(--desk-rail-width);
-    padding-top: 3.5rem;
-    padding-left: 2.25rem;
-    padding-right: 1.5rem;
+  .rail {
     display: flex;
     flex-direction: column;
+    width: var(--rail-w);
     flex-shrink: 0;
-    overflow: hidden;
-    position: relative;
+    background: var(--window-body);
+    border-right: 2px solid var(--chrome-shadow);
+    box-shadow: inset -1px 0 0 var(--chrome-highlight);
+    padding: 18px 14px;
+    overflow-y: auto;
   }
-
-  .rail-header {
+  .label {
+    font-family: var(--font-chrome);
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--ink);
+    letter-spacing: 0.18em;
+  }
+  .summary {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid color-mix(in srgb, var(--paper-edge) 95%, transparent);
-  }
-
-  .rail-heading {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-  }
-
-  .rail-kicker {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-    line-height: 1.2;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 600;
-  }
-
-  .rail-tallies {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
-  }
-
-  .rail-counts {
-    display: flex;
-    gap: 0.35rem;
-  }
-
-  .count-pill {
-    border-radius: 999px;
-    padding: 0.18rem 0.45rem;
+    align-items: center;
+    gap: 12px;
+    padding-top: 14px;
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    border: 1px solid transparent;
+    font-size: 12px;
+    color: var(--ink);
   }
-
-  .count-pill.insertion {
-    color: var(--insert-ink);
-    background: color-mix(in srgb, var(--insert-bg) 92%, transparent);
-    border-color: color-mix(in srgb, var(--insert-line) 85%, transparent);
+  .summary .muted {
+    color: var(--muted);
   }
-
-  .count-pill.deletion {
-    color: var(--delete-ink);
-    background: color-mix(in srgb, var(--delete-bg) 92%, transparent);
-    border-color: color-mix(in srgb, var(--delete-line) 85%, transparent);
+  .chipRow {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
   }
-
-  .empty-state {
-    padding-top: var(--space-4);
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 20px;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 11px;
+    box-shadow: var(--bevel-raised-chip);
+    flex-shrink: 0;
   }
-
-  .empty-state p {
-    font-family: var(--font-ui);
-    font-size: var(--text-ui);
-    line-height: 1.45;
-    color: var(--ink-ghost);
+  .chip.added {
+    background: var(--chip-green-bg);
+    border: 1px solid var(--chip-green-border);
+    color: var(--chip-green-text);
+  }
+  .chip.removed {
+    background: var(--chip-red-bg);
+    border: 1px solid var(--chip-red-border);
+    color: var(--chip-red-text);
+  }
+  .divider {
+    height: 2px;
+    border-top: 1px solid var(--chrome-shadow);
+    border-bottom: 1px solid var(--chrome-highlight);
+    background: transparent;
+    margin-top: 20px;
+  }
+  .empty {
+    margin-top: 18px;
+    padding: 14px 12px;
+    background: var(--rationale-well-bg);
+    border: 1px solid var(--chrome-shadow);
+    box-shadow: var(--bevel-sunken-1);
+    font-family: var(--font-chrome);
+    font-size: 12px;
+    font-style: italic;
+    color: var(--muted);
+    line-height: 18px;
   }
 
   .change-list {
     list-style: none;
     margin: 0;
-    padding: var(--space-2) 0 var(--space-12);
-    overflow-y: auto;
+    padding: 8px 0 0 0;
     display: flex;
     flex-direction: column;
+  }
+
+  .change-row + .change-row {
+    border-top: 1px solid var(--chrome-shadow);
   }
 
   .change-item {
@@ -319,63 +305,56 @@
     text-align: left;
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 0.4rem 0;
+    padding: 6px 4px;
     cursor: pointer;
     display: flex;
     align-items: baseline;
-    gap: 0.4rem;
+    gap: 6px;
     min-width: 0;
-  }
-
-  .change-item:hover {
+    font-family: var(--font-chrome);
     color: var(--ink);
   }
-
+  .change-item:hover {
+    background: var(--chrome-highlight);
+  }
+  .change-item:focus-visible,
+  .trivial-toggle:focus-visible {
+    outline: 2px solid var(--navy-chrome);
+    outline-offset: -2px;
+  }
   .change-item.selected {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    background: color-mix(in srgb, var(--paper-bright) 50%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
-    border-radius: var(--radius-xl);
+    background: var(--chrome-highlight);
+    box-shadow: var(--bevel-sunken-1);
   }
-
   .change-item.near-cursor:not(.selected) {
-    padding-left: 0.35rem;
+    background: color-mix(in srgb, var(--chrome-highlight) 50%, transparent);
   }
-
-  .change-item.annotated:not(.selected) {
-    color: var(--annotation-ink);
-  }
-
   .change-item.trivial {
-    opacity: 0.6;
+    opacity: 0.7;
   }
 
   .type-icon {
     flex-shrink: 0;
     font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     line-height: 1;
-    width: 1rem;
+    width: 12px;
     text-align: center;
-    color: var(--ink-ghost);
+    color: var(--muted);
   }
-
   .type-icon.deletion {
-    color: var(--delete-ink);
+    color: var(--chip-red-text);
   }
-
   .type-icon.insertion {
-    color: var(--insert-ink);
+    color: var(--chip-green-text);
   }
 
   .change-text {
-    font-family: var(--font-body);
-    font-size: 0.75rem;
-    line-height: 1.35;
-    color: var(--annotation-ink);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--ink);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -384,17 +363,16 @@
 
   .annotation-dot {
     flex-shrink: 0;
-    width: 5px;
-    height: 5px;
-    border-radius: 999px;
-    background: var(--accent);
+    width: 6px;
+    height: 6px;
+    background: var(--navy-chrome);
     margin-left: auto;
   }
 
   .trivial-row {
-    margin-top: var(--space-2);
-    padding-top: var(--space-2);
-    border-top: 1px solid color-mix(in srgb, var(--paper-edge) 70%, transparent);
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--chrome-shadow);
   }
 
   .trivial-toggle {
@@ -402,14 +380,14 @@
     text-align: left;
     background: transparent;
     border: none;
-    padding: 0.3rem 0;
-    font-family: var(--font-ui);
-    font-size: var(--text-ui-small);
-    color: var(--ink-ghost);
+    padding: 4px 4px;
+    font-family: var(--font-chrome);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
     cursor: pointer;
   }
-
   .trivial-toggle:hover {
-    color: var(--ink-faded);
+    color: var(--ink);
   }
 </style>

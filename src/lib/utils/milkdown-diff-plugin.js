@@ -103,6 +103,7 @@ function createDiffDecorations(doc, textMap, diffResult, selectedChangeId, onCli
             'data-change-id': change.id,
             'data-change-text': change.text,
             'data-change-type': 'insertion',
+            title: '⌥-click to annotate',
           })
         );
       }
@@ -183,6 +184,9 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
             const changeText = changeEl.dataset?.changeText;
             const changeType = changeEl.dataset?.changeType;
 
+            // Deletions are widget-only, so they always intercept the click.
+            // Insertions select their change but let a bare click fall through
+            // to normal cursor placement; ⌥-click selects without moving the caret.
             if (changeType !== 'deletion' && changeType !== 'insertion') {
               return false;
             }
@@ -190,7 +194,7 @@ export function createDiffPlugin(getDiffResult, onClickChange, getSelectedChange
             if (changeId && changeText) {
               const rect = changeEl.getBoundingClientRect();
               currentClickHandler(changeId, changeText, rect.right + 8, rect.top);
-              return changeType === 'deletion';
+              return changeType === 'deletion' || event.altKey;
             }
           }
           return false;
